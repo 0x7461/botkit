@@ -1,0 +1,11 @@
+# Environment variables (sensitive!)
+.env
+
+# Build output
+github-trending
+*.exe
+*.out
+
+# Go specific
+*.test
+*.prof
