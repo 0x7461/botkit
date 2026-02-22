@@ -1,4 +1,4 @@
-module github.com/0x7461/github-trending
+module github.com/0x7461/botkit
 
 go 1.25.5
 

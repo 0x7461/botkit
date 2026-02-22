@@ -7,9 +7,9 @@ import (
 
 	"github.com/joho/godotenv"
 
-	"github.com/0x7461/github-trending/bot"
-	github "github.com/0x7461/github-trending/sources/github"
-	"github.com/0x7461/github-trending/telegram"
+	"github.com/0x7461/botkit/bot"
+	github "github.com/0x7461/botkit/sources/github"
+	"github.com/0x7461/botkit/telegram"
 )
 
 func main() {

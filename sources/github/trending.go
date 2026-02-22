@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/PuerkitoBio/goquery"
-	"github.com/0x7461/github-trending/bot"
+	"github.com/0x7461/botkit/bot"
 )
 
 // TrendingSource fetches trending repositories from GitHub.

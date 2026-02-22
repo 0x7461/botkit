@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/0x7461/github-trending/bot"
+	"github.com/0x7461/botkit/bot"
 )
 
 // Formatter formats items into Telegram Markdown messages.
