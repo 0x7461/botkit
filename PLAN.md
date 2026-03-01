@@ -4,7 +4,7 @@ Lightweight Go framework for scheduled Telegram bots.
 
 ## Status
 
-**Implement** — Framework extracted, GitHub trending bot running in production.
+**Maintain** — Framework extracted, GitHub trending bot running in production.
 
 ## Architecture
 
@@ -30,9 +30,11 @@ Service: `~/service/botkit/`
 
 ## Roadmap
 
-- [ ] Language filter for GitHub trending (skip repos with no language)
-- [ ] Multiple sources in one run (e.g. trending + HN top)
 - [ ] Config file for source/formatter/sender selection (no recompile needed)
+
+## Notes
+
+- Each source should be a separate bot/binary with its own schedule and message format — don't bundle sources into one delivery. Multiple bots can share the same Telegram bot token but deliver independently.
 
 ---
 
