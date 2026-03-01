@@ -8,8 +8,9 @@ import (
 	"github.com/joho/godotenv"
 
 	"github.com/0x7461/botkit/bot"
+	"github.com/0x7461/botkit/formatters/markdown"
 	github "github.com/0x7461/botkit/sources/github"
-	"github.com/0x7461/botkit/telegram"
+	"github.com/0x7461/botkit/senders/telegram"
 )
 
 func main() {
@@ -18,7 +19,7 @@ func main() {
 	}
 
 	source := &github.TrendingSource{Period: "weekly"}
-	formatter := &telegram.Formatter{Title: "GitHub Trending — Weekly Report"}
+	formatter := &markdown.Formatter{Title: "GitHub Trending — Weekly Report"}
 
 	if os.Getenv("ENABLE_TELEGRAM") != "true" {
 		// Dry run — fetch and print count only

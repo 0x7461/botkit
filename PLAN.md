@@ -9,18 +9,20 @@ Lightweight Go framework for scheduled Telegram bots.
 ## Architecture
 
 ```
-bot/bot.go                  — Item struct, Source/Formatter/Sender interfaces, Bot.Run()
-sources/github/trending.go  — GitHubTrendingSource (weekly, configurable period)
-telegram/sender.go          — TelegramSender + GetChatID helper
-telegram/formatter.go       — TelegramFormatter (legacy Markdown)
-main.go                     — wires GitHub trending bot together
+cmd/gh-bot/main.go              — wires gh trending bot (source + formatter + sender)
+bot/bot.go                      — Item struct, Source/Formatter/Sender interfaces, Bot.Run()
+sources/github/trending.go      — GitHubTrendingSource (weekly, configurable period)
+formatters/markdown/formatter.go — Telegram Markdown formatter
+senders/telegram/sender.go      — TelegramSender + GetChatID helper
+bin/                            — built binaries (gitignored), build with:
+                                  go build -o bin/gh-bot ./cmd/gh-bot/
 ```
 
 ## Running Bot
 
 GitHub trending → Telegram, every Saturday 10:00 via runit + snooze.
 
-Service: `~/service/botkit/`
+Service: `~/service/github-trending/`
 
 ## Adding a New Bot
 
