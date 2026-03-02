@@ -14,11 +14,59 @@ type Sender struct {
 	ChatID int64
 }
 
-func (s *Sender) Send(message string) error {
-	url := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", s.Token)
-	data := fmt.Sprintf("chat_id=%d&text=%s&parse_mode=Markdown", s.ChatID, message)
+const telegramMaxLen = 4096
+const repoSeparator = "\n━━━━━━━━━━━━━━━━━━━━\n\n"
 
-	resp, err := http.Post(url, "application/x-www-form-urlencoded", strings.NewReader(data))
+func (s *Sender) Send(message string) error {
+	for _, chunk := range splitMessage(message) {
+		if err := s.sendChunk(chunk); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func splitMessage(message string) []string {
+	if len(message) <= telegramMaxLen {
+		return []string{message}
+	}
+
+	parts := strings.Split(message, repoSeparator)
+	var chunks []string
+	current := ""
+
+	for i, part := range parts {
+		segment := part
+		if i < len(parts)-1 {
+			segment += repoSeparator
+		}
+		if len(current)+len(segment) > telegramMaxLen {
+			if current != "" {
+				chunks = append(chunks, current)
+			}
+			current = segment
+		} else {
+			current += segment
+		}
+	}
+	if current != "" {
+		chunks = append(chunks, current)
+	}
+	return chunks
+}
+
+func (s *Sender) sendChunk(message string) error {
+	apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", s.Token)
+	payload, err := json.Marshal(map[string]any{
+		"chat_id":    s.ChatID,
+		"text":       message,
+		"parse_mode": "Markdown",
+	})
+	if err != nil {
+		return fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	resp, err := http.Post(apiURL, "application/json", strings.NewReader(string(payload)))
 	if err != nil {
 		return fmt.Errorf("failed to send message: %w", err)
 	}
