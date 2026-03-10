@@ -13,14 +13,23 @@ import (
 	"github.com/0x7461/botkit/sources/rss"
 )
 
-const maxDelivery = 20 // cap items per run to avoid flooding
+const maxDelivery = 50 // cap items per run to avoid flooding
 
 var feeds = []rss.FeedConfig{
-	{Name: "HN Best", URL: "https://hnrss.org/best", MaxItems: 5},
-	{Name: "Lobsters", URL: "https://lobste.rs/rss", MaxItems: 5},
-	{Name: "Techmeme", URL: "https://techmeme.com/feed.xml", MaxItems: 5},
-	{Name: "Dan Luu", URL: "https://danluu.com/atom.xml", MaxItems: 3},
-	{Name: "Julia Evans", URL: "https://jvns.ca/atom.xml", MaxItems: 3},
+	{Name: "HN Best", URL: "https://hnrss.org/best", MaxItems: 10, DiscussionLabel: "HN"},
+	{Name: "Lobsters", URL: "https://lobste.rs/rss", MaxItems: 10},
+	{Name: "Techmeme", URL: "https://techmeme.com/feed.xml", MaxItems: 10},
+	{Name: "Dan Luu", URL: "https://danluu.com/atom.xml", MaxItems: 5},
+	{Name: "Julia Evans", URL: "https://jvns.ca/atom.xml", MaxItems: 5},
+}
+
+func firstNonEmpty(vals ...string) string {
+	for _, v := range vals {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 func main() {
@@ -70,19 +79,21 @@ func main() {
 		return
 	}
 
-	token := os.Getenv("TELEGRAM_BOT_TOKEN")
+	token := firstNonEmpty(os.Getenv("BOT_RSS__TOKEN"), os.Getenv("TELEGRAM_BOT_TOKEN"))
 	var chatID int64
-	fmt.Sscanf(os.Getenv("TELEGRAM_CHAT_ID"), "%d", &chatID)
+	fmt.Sscanf(firstNonEmpty(os.Getenv("BOT_RSS__CHAT"), os.Getenv("TELEGRAM_CHAT_ID")), "%d", &chatID)
 	if token == "" || chatID == 0 {
-		log.Fatal("ENABLE_TELEGRAM=true but TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID is missing")
+		log.Fatal("ENABLE_TELEGRAM=true but BOT_RSS__TOKEN/BOT_RSS__CHAT (or TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID) is missing")
 	}
 
 	formatter := &rssformatter.Formatter{}
 	sender := &telegram.Sender{Token: token, ChatID: chatID}
 
-	message := formatter.Format(unseen)
-	if err := sender.Send(message); err != nil {
-		log.Fatalf("send: %v", err)
+	messages := formatter.FormatAll(unseen)
+	for _, msg := range messages {
+		if err := sender.Send(msg); err != nil {
+			log.Fatalf("send: %v", err)
+		}
 	}
 
 	// Only mark seen after successful delivery

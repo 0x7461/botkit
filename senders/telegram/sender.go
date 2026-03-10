@@ -31,18 +31,40 @@ func splitMessage(message string) []string {
 		return []string{message}
 	}
 
-	parts := strings.Split(message, repoSeparator)
+	// Try splitting on repo separator (GitHub trending format)
+	if strings.Contains(message, repoSeparator) {
+		parts := strings.Split(message, repoSeparator)
+		var chunks []string
+		current := ""
+		for i, part := range parts {
+			segment := part
+			if i < len(parts)-1 {
+				segment += repoSeparator
+			}
+			if len(current)+len(segment) > telegramMaxLen {
+				if current != "" {
+					chunks = append(chunks, current)
+				}
+				current = segment
+			} else {
+				current += segment
+			}
+		}
+		if current != "" {
+			chunks = append(chunks, current)
+		}
+		return chunks
+	}
+
+	// Fallback: split on newlines
+	lines := strings.Split(message, "\n")
 	var chunks []string
 	current := ""
-
-	for i, part := range parts {
-		segment := part
-		if i < len(parts)-1 {
-			segment += repoSeparator
-		}
+	for _, line := range lines {
+		segment := line + "\n"
 		if len(current)+len(segment) > telegramMaxLen {
 			if current != "" {
-				chunks = append(chunks, current)
+				chunks = append(chunks, strings.TrimRight(current, "\n"))
 			}
 			current = segment
 		} else {
@@ -50,7 +72,7 @@ func splitMessage(message string) []string {
 		}
 	}
 	if current != "" {
-		chunks = append(chunks, current)
+		chunks = append(chunks, strings.TrimRight(current, "\n"))
 	}
 	return chunks
 }
@@ -60,7 +82,7 @@ func (s *Sender) sendChunk(message string) error {
 	payload, err := json.Marshal(map[string]any{
 		"chat_id":    s.ChatID,
 		"text":       message,
-		"parse_mode": "Markdown",
+		"parse_mode": "HTML",
 	})
 	if err != nil {
 		return fmt.Errorf("failed to marshal request: %w", err)

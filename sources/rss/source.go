@@ -2,6 +2,7 @@ package rss
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/mmcdole/gofeed"
 	"github.com/0x7461/botkit/bot"
@@ -9,9 +10,10 @@ import (
 
 // FeedConfig describes a single RSS/Atom feed to follow.
 type FeedConfig struct {
-	Name     string
-	URL      string
-	MaxItems int // max items to return per fetch (default 5)
+	Name            string
+	URL             string
+	MaxItems        int    // max items to return per fetch (default 5)
+	DiscussionLabel string // label for discussion link when guid != link (e.g. "HN")
 }
 
 // RSSSource fetches items from a list of RSS/Atom feeds.
@@ -47,7 +49,7 @@ func (s *RSSSource) Fetch() ([]bot.Item, error) {
 			}
 
 			desc := entry.Description
-			if entry.Content != "" && len(entry.Content) < len(desc) {
+			if desc == "" {
 				desc = entry.Content
 			}
 			// Trim description to a reasonable length
@@ -55,14 +57,24 @@ func (s *RSSSource) Fetch() ([]bot.Item, error) {
 				desc = desc[:200] + "…"
 			}
 
+			meta := map[string]string{
+				"feed": feed.Name,
+				"guid": guid,
+			}
+			if guid != entry.Link && strings.HasPrefix(guid, "http") {
+				label := feed.DiscussionLabel
+				if label == "" {
+					label = "Discussion"
+				}
+				meta["discussion"] = guid
+				meta["discussion_label"] = label
+			}
+
 			items = append(items, bot.Item{
 				Title:       entry.Title,
 				URL:         entry.Link,
 				Description: desc,
-				Meta: map[string]string{
-					"feed": feed.Name,
-					"guid": guid,
-				},
+				Meta:        meta,
 			})
 		}
 	}

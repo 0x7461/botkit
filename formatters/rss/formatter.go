@@ -7,15 +7,15 @@ import (
 	"github.com/0x7461/botkit/bot"
 )
 
-// Formatter groups RSS items by feed and formats them as Telegram Markdown.
+// Formatter groups RSS items by feed and formats them as Telegram HTML.
 type Formatter struct{}
 
-func (f *Formatter) Format(items []bot.Item) string {
+// FormatAll formats items as one Telegram HTML message per feed.
+func (f *Formatter) FormatAll(items []bot.Item) []string {
 	if len(items) == 0 {
-		return ""
+		return nil
 	}
 
-	// Group by feed, preserving order of first appearance
 	order := []string{}
 	groups := map[string][]bot.Item{}
 	for _, item := range items {
@@ -29,27 +29,29 @@ func (f *Formatter) Format(items []bot.Item) string {
 		groups[feed] = append(groups[feed], item)
 	}
 
-	var sb strings.Builder
-	sb.WriteString("📰 *RSS Digest*\n")
-
+	var messages []string
 	for _, feed := range order {
-		feedItems := groups[feed]
-		sb.WriteString(fmt.Sprintf("\n*%s*\n", escapeMarkdown(feed)))
-		for _, item := range feedItems {
-			title := escapeMarkdown(item.Title)
-			sb.WriteString(fmt.Sprintf("• [%s](%s)\n", title, item.URL))
+		var sb strings.Builder
+		sb.WriteString(fmt.Sprintf("📰 <b>%s</b>\n", escapeHTML(feed)))
+		for _, item := range groups[feed] {
+			line := fmt.Sprintf("• <a href=\"%s\">%s</a>", item.URL, escapeHTML(item.Title))
+			if disc := item.Meta["discussion"]; disc != "" {
+				label := item.Meta["discussion_label"]
+				if label == "" {
+					label = "Discussion"
+				}
+				line += fmt.Sprintf(" · <a href=\"%s\">%s</a>", disc, escapeHTML(label))
+			}
+			sb.WriteString(line + "\n")
 		}
+		messages = append(messages, sb.String())
 	}
-
-	return sb.String()
+	return messages
 }
 
-// escapeMarkdown escapes Telegram MarkdownV1 special characters.
-func escapeMarkdown(s string) string {
-	s = strings.ReplaceAll(s, "[", "\\[")
-	s = strings.ReplaceAll(s, "]", "\\]")
-	s = strings.ReplaceAll(s, "_", "\\_")
-	s = strings.ReplaceAll(s, "*", "\\*")
-	s = strings.ReplaceAll(s, "`", "\\`")
+func escapeHTML(s string) string {
+	s = strings.ReplaceAll(s, "&", "&amp;")
+	s = strings.ReplaceAll(s, "<", "&lt;")
+	s = strings.ReplaceAll(s, ">", "&gt;")
 	return s
 }
