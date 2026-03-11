@@ -91,7 +91,8 @@ func handleMessage(bot *TelegramBot, registry *ModelRegistry, history *History, 
 			"/clear — reset conversation\n" +
 			"/model — show current model\n" +
 			"/model " + strings.Join(names, "|") + " — switch model\n" +
-			"/tools — toggle file access (requires passphrase)"
+			"/tools — toggle file access (requires passphrase)\n" +
+			"/nagger — view/update quota reset time"
 		bot.SendMessage(chatID, greeting)
 		return
 
@@ -135,6 +136,10 @@ func handleMessage(bot *TelegramBot, registry *ModelRegistry, history *History, 
 		cc.ToolsEnabled[chatID] = true
 		log.Printf("tools enabled for chat %d", chatID)
 		bot.SendMessage(chatID, "Tools enabled: Read, Write, Edit, Glob, Grep.\nClaude can now create and modify files.\nSend /tools off to disable.")
+		return
+
+	case strings.HasPrefix(text, "/nagger"):
+		handleNagger(bot, chatID, text)
 		return
 
 	case strings.HasPrefix(text, "/model"):
