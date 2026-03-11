@@ -29,7 +29,7 @@ type ollamaResponse struct {
 	Error   string        `json:"error,omitempty"`
 }
 
-func (o *OllamaClient) Chat(model string, messages []ChatMessage) (string, error) {
+func (o *OllamaClient) Chat(model string, messages []ChatMessage, chatID int64) (string, error) {
 	var msgs []ollamaMessage
 	msgs = append(msgs, ollamaMessage{
 		Role:    "system",

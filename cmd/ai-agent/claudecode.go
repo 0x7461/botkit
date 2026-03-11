@@ -7,15 +7,28 @@ import (
 	"strings"
 )
 
-type ClaudeCodeClient struct{}
+type ClaudeCodeClient struct {
+	ToolsEnabled map[int64]bool // per-chat tools state
+}
 
-func (c *ClaudeCodeClient) Chat(model string, messages []ChatMessage) (string, error) {
+const toolsAllowed = "Read,Write,Edit,Glob,Grep"
+
+func (c *ClaudeCodeClient) Chat(model string, messages []ChatMessage, chatID int64) (string, error) {
 	prompt := buildPrompt(messages)
 
-	args := []string{"-p", prompt, "--model", model, "--output-format", "text", "--allowedTools", ""}
+	allowed := ""
+	if c.ToolsEnabled[chatID] {
+		allowed = toolsAllowed
+	}
+	args := []string{"-p", prompt, "--model", model, "--output-format", "text", "--allowedTools", allowed}
 	cmd := exec.Command("claude", args...)
 	cmd.Env = filterEnv("CLAUDECODE")
-	cmd.Dir = os.TempDir()
+	dir := os.TempDir()
+	if c.ToolsEnabled[chatID] {
+		// Run from home so file paths make sense
+		dir, _ = os.UserHomeDir()
+	}
+	cmd.Dir = dir
 	output, err := cmd.Output()
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {

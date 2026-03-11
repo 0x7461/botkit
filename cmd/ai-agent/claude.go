@@ -37,7 +37,7 @@ type claudeResponse struct {
 	} `json:"error"`
 }
 
-func (c *ClaudeClient) Chat(model string, messages []ChatMessage) (string, error) {
+func (c *ClaudeClient) Chat(model string, messages []ChatMessage, chatID int64) (string, error) {
 	var msgs []claudeMessage
 	for _, m := range messages {
 		msgs = append(msgs, claudeMessage{Role: m.Role, Content: m.Content})

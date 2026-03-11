@@ -33,6 +33,8 @@ func main() {
 		fmt.Sscanf(chatStr, "%d", &allowedChat)
 	}
 
+	toolsSecret := os.Getenv("AI_TOOLS_SECRET")
+
 	registry := NewRegistry()
 
 	home, _ := os.UserHomeDir()
@@ -71,12 +73,12 @@ func main() {
 				continue
 			}
 
-			handleMessage(bot, registry, history, msg)
+			handleMessage(bot, registry, history, msg, toolsSecret)
 		}
 	}
 }
 
-func handleMessage(bot *TelegramBot, registry *ModelRegistry, history *History, msg *Message) {
+func handleMessage(bot *TelegramBot, registry *ModelRegistry, history *History, msg *Message, toolsSecret string) {
 	chatID := msg.Chat.ID
 	text := strings.TrimSpace(msg.Text)
 
@@ -88,7 +90,8 @@ func handleMessage(bot *TelegramBot, registry *ModelRegistry, history *History, 
 			"Commands:\n" +
 			"/clear — reset conversation\n" +
 			"/model — show current model\n" +
-			"/model " + strings.Join(names, "|") + " — switch model"
+			"/model " + strings.Join(names, "|") + " — switch model\n" +
+			"/tools — toggle file access (requires passphrase)"
 		bot.SendMessage(chatID, greeting)
 		return
 
@@ -99,6 +102,39 @@ func handleMessage(bot *TelegramBot, registry *ModelRegistry, history *History, 
 	case text == "/clear confirm":
 		history.Clear(chatID)
 		bot.SendMessage(chatID, "Conversation cleared.")
+		return
+
+	case text == "/tools off":
+		if cc := getClaudeCode(registry); cc != nil {
+			delete(cc.ToolsEnabled, chatID)
+			log.Printf("tools disabled for chat %d", chatID)
+		}
+		bot.SendMessage(chatID, "Tools disabled.")
+		return
+
+	case strings.HasPrefix(text, "/tools"):
+		parts := strings.SplitN(text, " ", 2)
+		if len(parts) < 2 || toolsSecret == "" {
+			cc := getClaudeCode(registry)
+			if cc != nil && cc.ToolsEnabled[chatID] {
+				bot.SendMessage(chatID, "Tools: ON (Read, Write, Edit, Glob, Grep)\nSend /tools off to disable.")
+			} else {
+				bot.SendMessage(chatID, "Tools: OFF\nSend /tools <passphrase> to enable file access.")
+			}
+			return
+		}
+		if parts[1] != toolsSecret {
+			bot.SendMessage(chatID, "Wrong passphrase.")
+			return
+		}
+		cc := getClaudeCode(registry)
+		if cc == nil {
+			bot.SendMessage(chatID, "Tools only available with claude-code backend models.")
+			return
+		}
+		cc.ToolsEnabled[chatID] = true
+		log.Printf("tools enabled for chat %d", chatID)
+		bot.SendMessage(chatID, "Tools enabled: Read, Write, Edit, Glob, Grep.\nClaude can now create and modify files.\nSend /tools off to disable.")
 		return
 
 	case strings.HasPrefix(text, "/model"):
@@ -130,7 +166,7 @@ func handleMessage(bot *TelegramBot, registry *ModelRegistry, history *History, 
 		return
 	}
 
-	response, err := registry.Chat(model, messages)
+	response, err := registry.Chat(model, messages, chatID)
 	if err != nil {
 		log.Printf("llm error: %v", err)
 		bot.SendMessage(chatID, fmt.Sprintf("Error: %v", err))
@@ -139,6 +175,15 @@ func handleMessage(bot *TelegramBot, registry *ModelRegistry, history *History, 
 
 	history.Add(chatID, "assistant", response, model)
 	bot.SendMessage(chatID, response)
+}
+
+func getClaudeCode(registry *ModelRegistry) *ClaudeCodeClient {
+	for _, entry := range registry.Models {
+		if cc, ok := entry.Backend.(*ClaudeCodeClient); ok {
+			return cc
+		}
+	}
+	return nil
 }
 
 func modelNames(registry *ModelRegistry) []string {

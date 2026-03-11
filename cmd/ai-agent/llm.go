@@ -7,7 +7,7 @@ import (
 
 // LLM is the interface for language model backends.
 type LLM interface {
-	Chat(model string, messages []ChatMessage) (string, error)
+	Chat(model string, messages []ChatMessage, chatID int64) (string, error)
 }
 
 // ModelEntry maps a friendly name to a backend + model ID.
@@ -40,7 +40,7 @@ func NewRegistry() *ModelRegistry {
 
 	// Claude Code — available if claude binary is in PATH
 	if _, err := exec.LookPath("claude"); err == nil {
-		cc := &ClaudeCodeClient{}
+		cc := &ClaudeCodeClient{ToolsEnabled: make(map[int64]bool)}
 		for name, id := range cc.Models() {
 			r.Models[name] = ModelEntry{Backend: cc, ModelID: id}
 		}
@@ -59,10 +59,11 @@ func NewRegistry() *ModelRegistry {
 	return r
 }
 
-func (r *ModelRegistry) Chat(name string, messages []ChatMessage) (string, error) {
+func (r *ModelRegistry) Chat(name string, messages []ChatMessage, chatID int64) (string, error) {
 	entry, ok := r.Models[name]
 	if !ok {
 		entry = r.Models[r.DefaultModel]
 	}
-	return entry.Backend.Chat(entry.ModelID, messages)
+	return entry.Backend.Chat(entry.ModelID, messages, chatID)
 }
+
