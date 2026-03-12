@@ -77,6 +77,9 @@ func (h *History) Get(chatID int64, limit int) ([]ChatMessage, error) {
 		}
 		msgs = append(msgs, m)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 
 	// Reverse to chronological order
 	for i, j := 0, len(msgs)-1; i < j; i, j = i+1, j-1 {

@@ -6,7 +6,10 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 )
+
+var senderHTTPClient = &http.Client{Timeout: 30 * time.Second}
 
 // Sender delivers messages via the Telegram Bot API.
 type Sender struct {
@@ -15,7 +18,7 @@ type Sender struct {
 }
 
 const telegramMaxLen = 4096
-const repoSeparator = "\n━━━━━━━━━━━━━━━━━━━━\n\n"
+const repoSeparator = "\n---\n\n"
 
 func (s *Sender) Send(message string) error {
 	for _, chunk := range splitMessage(message) {
@@ -61,6 +64,15 @@ func splitMessage(message string) []string {
 	var chunks []string
 	current := ""
 	for _, line := range lines {
+		// Handle single lines longer than the limit by hard-splitting them
+		for len(line) > telegramMaxLen {
+			if current != "" {
+				chunks = append(chunks, strings.TrimRight(current, "\n"))
+				current = ""
+			}
+			chunks = append(chunks, line[:telegramMaxLen])
+			line = line[telegramMaxLen:]
+		}
 		segment := line + "\n"
 		if len(current)+len(segment) > telegramMaxLen {
 			if current != "" {
@@ -88,7 +100,7 @@ func (s *Sender) sendChunk(message string) error {
 		return fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	resp, err := http.Post(apiURL, "application/json", strings.NewReader(string(payload)))
+	resp, err := senderHTTPClient.Post(apiURL, "application/json", strings.NewReader(string(payload)))
 	if err != nil {
 		return fmt.Errorf("failed to send message: %w", err)
 	}
@@ -112,7 +124,7 @@ func (s *Sender) sendChunk(message string) error {
 // Requires the user to have sent /start to the bot first.
 func GetChatID(token string) (int64, error) {
 	url := fmt.Sprintf("https://api.telegram.org/bot%s/getUpdates", token)
-	resp, err := http.Get(url)
+	resp, err := senderHTTPClient.Get(url)
 	if err != nil {
 		return 0, fmt.Errorf("failed to fetch updates: %w", err)
 	}

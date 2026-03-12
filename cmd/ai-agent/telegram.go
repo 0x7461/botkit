@@ -6,10 +6,15 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 )
 
 const telegramAPI = "https://api.telegram.org/bot"
 const maxMessageLen = 4096
+
+// Long-poll timeout is 30s, so HTTP timeout must be longer to avoid
+// cutting off the connection before Telegram responds.
+var telegramHTTPClient = &http.Client{Timeout: 60 * time.Second}
 
 type TelegramBot struct {
 	Token  string
@@ -33,7 +38,7 @@ type Chat struct {
 
 func (b *TelegramBot) GetUpdates() ([]Update, error) {
 	url := fmt.Sprintf("%s%s/getUpdates?timeout=30&offset=%d", telegramAPI, b.Token, b.Offset)
-	resp, err := http.Get(url)
+	resp, err := telegramHTTPClient.Get(url)
 	if err != nil {
 		return nil, err
 	}
@@ -68,7 +73,7 @@ func (b *TelegramBot) sendChunk(chatID int64, text string) error {
 		"chat_id": chatID,
 		"text":    text,
 	})
-	resp, err := http.Post(url, "application/json", strings.NewReader(string(payload)))
+	resp, err := telegramHTTPClient.Post(url, "application/json", strings.NewReader(string(payload)))
 	if err != nil {
 		return err
 	}
@@ -94,6 +99,15 @@ func splitText(text string) []string {
 	var chunks []string
 	current := ""
 	for _, line := range lines {
+		// Handle single lines longer than the limit by hard-splitting them
+		for len(line) > maxMessageLen {
+			if current != "" {
+				chunks = append(chunks, current)
+				current = ""
+			}
+			chunks = append(chunks, line[:maxMessageLen])
+			line = line[maxMessageLen:]
+		}
 		if len(current)+len(line)+1 > maxMessageLen && current != "" {
 			chunks = append(chunks, current)
 			current = ""

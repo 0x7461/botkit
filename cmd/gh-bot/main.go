@@ -13,15 +13,6 @@ import (
 	"github.com/0x7461/botkit/senders/telegram"
 )
 
-func firstNonEmpty(vals ...string) string {
-	for _, v := range vals {
-		if v != "" {
-			return v
-		}
-	}
-	return ""
-}
-
 func main() {
 	if err := godotenv.Load(); err != nil {
 		log.Println("No .env file found — using environment variables")
@@ -40,9 +31,14 @@ func main() {
 		return
 	}
 
-	token := firstNonEmpty(os.Getenv("BOT_GH__TOKEN"), os.Getenv("TELEGRAM_BOT_TOKEN"))
+	token := bot.FirstNonEmpty(os.Getenv("BOT_GH__TOKEN"), os.Getenv("TELEGRAM_BOT_TOKEN"))
 	var chatID int64
-	fmt.Sscanf(firstNonEmpty(os.Getenv("BOT_GH__CHAT"), os.Getenv("TELEGRAM_CHAT_ID")), "%d", &chatID)
+	chatStr := bot.FirstNonEmpty(os.Getenv("BOT_GH__CHAT"), os.Getenv("TELEGRAM_CHAT_ID"))
+	if chatStr != "" {
+		if _, err := fmt.Sscanf(chatStr, "%d", &chatID); err != nil {
+			log.Fatalf("invalid chat ID %q: %v", chatStr, err)
+		}
+	}
 
 	if token == "" || chatID == 0 {
 		log.Fatal("ENABLE_TELEGRAM=true but BOT_GH__TOKEN/BOT_GH__CHAT (or TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID) is missing")

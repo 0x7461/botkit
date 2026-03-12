@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"sort"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -30,14 +32,19 @@ func main() {
 	// Restrict to specific chat for security
 	var allowedChat int64
 	if chatStr := os.Getenv("BOT_AI__CHAT"); chatStr != "" {
-		fmt.Sscanf(chatStr, "%d", &allowedChat)
+		if _, err := fmt.Sscanf(chatStr, "%d", &allowedChat); err != nil || allowedChat == 0 {
+			log.Fatalf("BOT_AI__CHAT must be a valid non-zero chat ID, got %q", chatStr)
+		}
 	}
 
 	toolsSecret := os.Getenv("AI_TOOLS_SECRET")
 
 	registry := NewRegistry()
 
-	home, _ := os.UserHomeDir()
+	home, err := os.UserHomeDir()
+	if err != nil {
+		log.Fatalf("cannot determine home directory: %v", err)
+	}
 	dbPath := filepath.Join(home, ".local", "share", "botkit", "ai-agent.db")
 
 	history, err := NewHistory(dbPath)
@@ -48,11 +55,23 @@ func main() {
 
 	bot := &TelegramBot{Token: token}
 
+	// Graceful shutdown on SIGTERM/SIGINT so defers run (e.g. history.Close)
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+
 	// Log available models
 	names := modelNames(registry)
 	log.Printf("AI agent started — models: %s (default: %s)", strings.Join(names, ", "), registry.DefaultModel)
 
 	for {
+		// Check for shutdown signal between polls
+		select {
+		case sig := <-sigCh:
+			log.Printf("received %s, shutting down", sig)
+			return
+		default:
+		}
+
 		updates, err := bot.GetUpdates()
 		if err != nil {
 			log.Printf("poll error: %v", err)
@@ -162,7 +181,11 @@ func handleMessage(bot *TelegramBot, registry *ModelRegistry, history *History, 
 
 	// Regular message — send to LLM
 	model := history.GetModel(chatID, registry.DefaultModel)
-	history.Add(chatID, "user", text, model)
+	if err := history.Add(chatID, "user", text, model); err != nil {
+		log.Printf("history add error: %v", err)
+		bot.SendMessage(chatID, "Error saving message.")
+		return
+	}
 
 	messages, err := history.Get(chatID, contextWindow)
 	if err != nil {
@@ -178,7 +201,9 @@ func handleMessage(bot *TelegramBot, registry *ModelRegistry, history *History, 
 		return
 	}
 
-	history.Add(chatID, "assistant", response, model)
+	if err := history.Add(chatID, "assistant", response, model); err != nil {
+		log.Printf("history add error: %v", err)
+	}
 	bot.SendMessage(chatID, response)
 }
 

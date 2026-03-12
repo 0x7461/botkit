@@ -10,6 +10,11 @@ import (
 // Formatter groups RSS items by feed and formats them as Telegram HTML.
 type Formatter struct{}
 
+// Format satisfies the bot.Formatter interface by joining all feed messages.
+func (f *Formatter) Format(items []bot.Item) string {
+	return strings.Join(f.FormatAll(items), "\n")
+}
+
 // FormatAll formats items as one Telegram HTML message per feed.
 func (f *Formatter) FormatAll(items []bot.Item) []string {
 	if len(items) == 0 {

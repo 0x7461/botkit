@@ -25,6 +25,7 @@ cmd/ai-agent/claudecode.go       — Claude Code CLI backend (Pro plan)
 cmd/ai-agent/claude.go           — Claude API backend (API key)
 cmd/ai-agent/telegram.go         — Long-polling + send
 cmd/ai-agent/history.go          — SQLite conversation history
+cmd/ai-agent/nagger.go           — /nagger command (reads/writes nagger config.toml)
 bin/                             — Built binaries (gitignored)
 ```
 
@@ -77,4 +78,4 @@ Both use `snooze` + runit (user services in `~/service/`). Restart with `SVDIR=~
 - **runit + dotenv CWD**: runit doesn't set CWD — run scripts must `cd /path/to/project` before exec so `godotenv.Load()` finds `.env`
 
 **Created:** 2026-02-22
-**Updated:** 2026-03-12
+**Updated:** 2026-03-13

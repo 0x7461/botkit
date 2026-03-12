@@ -6,10 +6,13 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 )
 
 const claudeAPI = "https://api.anthropic.com/v1/messages"
 const claudeVersion = "2023-06-01"
+
+var claudeHTTPClient = &http.Client{Timeout: 5 * time.Minute}
 
 type ClaudeClient struct {
 	APIKey string
@@ -55,7 +58,7 @@ func (c *ClaudeClient) Chat(model string, messages []ChatMessage, chatID int64) 
 	req.Header.Set("anthropic-version", claudeVersion)
 	req.Header.Set("content-type", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := claudeHTTPClient.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("claude request failed: %w", err)
 	}

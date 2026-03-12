@@ -26,7 +26,11 @@ func (c *ClaudeCodeClient) Chat(model string, messages []ChatMessage, chatID int
 	dir := os.TempDir()
 	if c.ToolsEnabled[chatID] {
 		// Run from home so file paths make sense
-		dir, _ = os.UserHomeDir()
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", fmt.Errorf("claude-code: cannot determine home directory: %w", err)
+		}
+		dir = home
 	}
 	cmd.Dir = dir
 	output, err := cmd.Output()

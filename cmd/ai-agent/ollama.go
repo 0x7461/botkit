@@ -6,7 +6,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 )
+
+var ollamaHTTPClient = &http.Client{Timeout: 5 * time.Minute}
 
 type OllamaClient struct {
 	BaseURL string
@@ -51,7 +54,7 @@ func (o *OllamaClient) Chat(model string, messages []ChatMessage, chatID int64) 
 	})
 
 	url := o.BaseURL + "/api/chat"
-	resp, err := http.Post(url, "application/json", bytes.NewReader(body))
+	resp, err := ollamaHTTPClient.Post(url, "application/json", bytes.NewReader(body))
 	if err != nil {
 		return "", fmt.Errorf("ollama request failed: %w", err)
 	}

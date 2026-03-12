@@ -37,6 +37,12 @@ func NewDeduplicator(path string) (*Deduplicator, error) {
 		return nil, fmt.Errorf("dedup: create table: %w", err)
 	}
 
+	// Prune entries older than 90 days to keep the table bounded
+	cutoff := time.Now().Add(-90 * 24 * time.Hour).Unix()
+	if _, err := db.Exec(`DELETE FROM seen WHERE seen_at < ?`, cutoff); err != nil {
+		return nil, fmt.Errorf("dedup: prune old entries: %w", err)
+	}
+
 	return &Deduplicator{db: db}, nil
 }
 

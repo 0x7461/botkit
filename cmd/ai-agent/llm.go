@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log"
 	"os"
 	"os/exec"
 )
@@ -38,17 +39,19 @@ func NewRegistry() *ModelRegistry {
 		r.Models[name] = ModelEntry{Backend: ollama, ModelID: id}
 	}
 
-	// Claude Code — available if claude binary is in PATH
+	// Claude Code — preferred when claude binary is in PATH (supports /tools)
+	// Claude API — fallback when only ANTHROPIC_API_KEY is set
+	// Only one Claude backend is registered to avoid silent overwrites.
 	if _, err := exec.LookPath("claude"); err == nil {
 		cc := &ClaudeCodeClient{ToolsEnabled: make(map[int64]bool)}
 		for name, id := range cc.Models() {
 			r.Models[name] = ModelEntry{Backend: cc, ModelID: id}
 		}
 		r.DefaultModel = "haiku"
-	}
-
-	// Claude API — available if ANTHROPIC_API_KEY is set
-	if key := os.Getenv("ANTHROPIC_API_KEY"); key != "" {
+		if os.Getenv("ANTHROPIC_API_KEY") != "" {
+			log.Println("note: ANTHROPIC_API_KEY set but claude binary found — using claude-code backend (supports /tools)")
+		}
+	} else if key := os.Getenv("ANTHROPIC_API_KEY"); key != "" {
 		api := &ClaudeClient{APIKey: key}
 		for name, id := range api.Models() {
 			r.Models[name] = ModelEntry{Backend: api, ModelID: id}

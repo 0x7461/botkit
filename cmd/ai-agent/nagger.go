@@ -21,13 +21,24 @@ var dayNames = map[string]int{
 
 var dayLabels = []string{"Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"}
 
-func naggerConfigPath() string {
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, "projects", "nagger", "config.toml")
+func naggerConfigPath() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("cannot determine home directory: %w", err)
+	}
+	return filepath.Join(home, "projects", "nagger", "config.toml"), nil
+}
+
+func mustNaggerConfigPath() string {
+	p, err := naggerConfigPath()
+	if err != nil {
+		log.Fatalf("%v", err)
+	}
+	return p
 }
 
 func readNaggerConfig() (weekday, hour int, err error) {
-	data, err := os.ReadFile(naggerConfigPath())
+	data, err := os.ReadFile(mustNaggerConfigPath())
 	if err != nil {
 		return 0, 0, err
 	}
@@ -66,7 +77,7 @@ func writeNaggerConfig(weekday, hour int) error {
 			"reset_hour = %d\n",
 		weekday, dayLabels[weekday], hour,
 	)
-	return os.WriteFile(naggerConfigPath(), []byte(content), 0644)
+	return os.WriteFile(mustNaggerConfigPath(), []byte(content), 0644)
 }
 
 func handleNagger(bot *TelegramBot, chatID int64, text string) {

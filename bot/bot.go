@@ -32,6 +32,16 @@ type Bot struct {
 	Sender    Sender
 }
 
+// FirstNonEmpty returns the first non-empty string from the arguments.
+func FirstNonEmpty(vals ...string) string {
+	for _, v := range vals {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
 // Run fetches, formats, and sends.
 func (b *Bot) Run() error {
 	items, err := b.Source.Fetch()

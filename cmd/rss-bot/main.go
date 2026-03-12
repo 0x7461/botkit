@@ -8,6 +8,7 @@ import (
 
 	"github.com/joho/godotenv"
 
+	"github.com/0x7461/botkit/bot"
 	rssformatter "github.com/0x7461/botkit/formatters/rss"
 	"github.com/0x7461/botkit/senders/telegram"
 	"github.com/0x7461/botkit/sources/rss"
@@ -23,22 +24,16 @@ var feeds = []rss.FeedConfig{
 	{Name: "Julia Evans", URL: "https://jvns.ca/atom.xml", MaxItems: 5},
 }
 
-func firstNonEmpty(vals ...string) string {
-	for _, v := range vals {
-		if v != "" {
-			return v
-		}
-	}
-	return ""
-}
-
 func main() {
 	if err := godotenv.Load(); err != nil {
 		log.Println("No .env file found — using environment variables")
 	}
 
 	// Deduplication DB
-	home, _ := os.UserHomeDir()
+	home, err := os.UserHomeDir()
+	if err != nil {
+		log.Fatalf("cannot determine home directory: %v", err)
+	}
 	dbPath := filepath.Join(home, ".local", "share", "botkit", "rss-seen.db")
 	dedup, err := rss.NewDeduplicator(dbPath)
 	if err != nil {
@@ -79,9 +74,14 @@ func main() {
 		return
 	}
 
-	token := firstNonEmpty(os.Getenv("BOT_RSS__TOKEN"), os.Getenv("TELEGRAM_BOT_TOKEN"))
+	token := bot.FirstNonEmpty(os.Getenv("BOT_RSS__TOKEN"), os.Getenv("TELEGRAM_BOT_TOKEN"))
 	var chatID int64
-	fmt.Sscanf(firstNonEmpty(os.Getenv("BOT_RSS__CHAT"), os.Getenv("TELEGRAM_CHAT_ID")), "%d", &chatID)
+	chatStr := bot.FirstNonEmpty(os.Getenv("BOT_RSS__CHAT"), os.Getenv("TELEGRAM_CHAT_ID"))
+	if chatStr != "" {
+		if _, err := fmt.Sscanf(chatStr, "%d", &chatID); err != nil {
+			log.Fatalf("invalid chat ID %q: %v", chatStr, err)
+		}
+	}
 	if token == "" || chatID == 0 {
 		log.Fatal("ENABLE_TELEGRAM=true but BOT_RSS__TOKEN/BOT_RSS__CHAT (or TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID) is missing")
 	}
