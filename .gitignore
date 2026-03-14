@@ -9,3 +9,7 @@ bin/
 # Go specific
 *.test
 *.prof
+
+# Project docs (local only)
+PLAN.md
+INSIGHTS.md

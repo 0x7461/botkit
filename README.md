@@ -5,17 +5,14 @@ A lightweight Go framework for scheduled Telegram bots. Implement three interfac
 ## Framework
 
 ```go
-// Source fetches items from anywhere.
 type Source interface {
     Fetch() ([]Item, error)
 }
 
-// Formatter turns items into a message string.
 type Formatter interface {
     Format(items []Item) string
 }
 
-// Sender delivers the message somewhere.
 type Sender interface {
     Send(message string) error
 }
@@ -23,62 +20,29 @@ type Sender interface {
 
 Adding a new bot = implement `Source`, pick a `Formatter` and `Sender`, pass to `bot.Bot{}`.
 
+## Bots
+
+- **rss-bot** — RSS feed aggregator. HN Best, Lobsters, Techmeme, blogs. SQLite dedup. Runs twice daily.
+- **gh-bot** — GitHub trending repos (weekly). Scrapes trending page via goquery. Runs weekly.
+- **ai-agent** — Telegram AI assistant ("The Smartass"). Multi-backend: Ollama, Claude Code CLI, Claude API. Persistent chat history, `/model` switching, tool access.
+
 ## Project Structure
 
 ```
 bot/                        — framework: interfaces + Bot runner
-sources/github/             — GitHubTrendingSource (first implementation)
-telegram/
-  sender.go                 — TelegramSender
-  formatter.go              — TelegramFormatter
-main.go                     — wires the GitHub trending bot together
+cmd/{rss-bot,gh-bot,ai-agent}/ — bot entry points
+sources/{rss,github}/       — Source implementations
+formatters/{rss,markdown}/  — Formatter implementations
+senders/telegram/           — Telegram sender (HTML, message splitting)
 ```
 
 ## Configuration
 
-Copy `.env.example` to `.env` and fill in:
-
-```env
-ENABLE_TELEGRAM=true
-TELEGRAM_BOT_TOKEN=your-bot-token
-TELEGRAM_CHAT_ID=your-chat-id
-```
-
-Get your Chat ID: send `/start` to your bot, then run `telegram.GetChatID(token)`.
-
-## Usage
-
-```bash
-# Dry run (Telegram disabled)
-go run main.go
-
-# Build and run
-go build -o botkit && ./botkit
-```
-
-## Scheduling (Void Linux / runit + snooze)
-
-`~/service/botkit/run`:
-```sh
-#!/bin/sh
-exec 2>&1
-exec snooze -w6 -H10 -M0 /home/ta/projects/botkit/botkit
-```
-
-`~/service/botkit/log/run`:
-```sh
-#!/bin/sh
-exec svlogd -tt ./main
-```
-
-```bash
-chmod +x ~/service/botkit/run ~/service/botkit/log/run
-sv status ~/service/botkit
-```
-
-Runs every Saturday at 10:00.
+Copy `.env.example` to `.env` and fill in bot tokens and chat IDs. Each bot can have its own token (`BOT_RSS__TOKEN`, `BOT_GH__TOKEN`) or fall back to `TELEGRAM_BOT_TOKEN`.
 
 ## Dependencies
 
-- [goquery](https://github.com/PuerkitoBio/goquery) — HTML parsing
+- [goquery](https://github.com/PuerkitoBio/goquery) — HTML parsing (GitHub trending)
+- [gofeed](https://github.com/mmcdole/gofeed) — RSS/Atom feed parsing
 - [godotenv](https://github.com/joho/godotenv) — .env loading
+- [go-sqlite3](https://github.com/mattn/go-sqlite3) — SQLite (RSS dedup, ai-agent history)
