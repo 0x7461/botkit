@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -56,24 +57,25 @@ func main() {
 	bot := &TelegramBot{Token: token}
 
 	// Graceful shutdown on SIGTERM/SIGINT so defers run (e.g. history.Close)
+	ctx, cancel := context.WithCancel(context.Background())
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		sig := <-sigCh
+		log.Printf("received %s, shutting down", sig)
+		cancel()
+	}()
 
 	// Log available models
 	names := modelNames(registry)
 	log.Printf("AI agent started — models: %s (default: %s)", strings.Join(names, ", "), registry.DefaultModel)
 
 	for {
-		// Check for shutdown signal between polls
-		select {
-		case sig := <-sigCh:
-			log.Printf("received %s, shutting down", sig)
-			return
-		default:
-		}
-
-		updates, err := bot.GetUpdates()
+		updates, err := bot.GetUpdates(ctx)
 		if err != nil {
+			if ctx.Err() != nil {
+				return // context cancelled — clean shutdown
+			}
 			log.Printf("poll error: %v", err)
 			time.Sleep(5 * time.Second)
 			continue
@@ -95,6 +97,11 @@ func main() {
 			handleMessage(bot, registry, history, msg, toolsSecret)
 		}
 	}
+}
+
+var highCostModels = map[string]bool{
+	"sonnet": true,
+	"opus":   true,
 }
 
 func handleMessage(bot *TelegramBot, registry *ModelRegistry, history *History, msg *Message, toolsSecret string) {
@@ -166,12 +173,16 @@ func handleMessage(bot *TelegramBot, registry *ModelRegistry, history *History, 
 		names := modelNames(registry)
 		if len(parts) < 2 {
 			current := history.GetModel(chatID, registry.DefaultModel)
-			bot.SendMessage(chatID, fmt.Sprintf("Current: %s\nAvailable: %s", current, strings.Join(names, ", ")))
+			bot.SendMessage(chatID, fmt.Sprintf("Current: %s\nAvailable: %s\nTo switch: /model <name>", current, strings.Join(names, ", ")))
 			return
 		}
 		name := parts[1]
 		if _, ok := registry.Models[name]; !ok {
 			bot.SendMessage(chatID, fmt.Sprintf("Unknown model. Available: %s", strings.Join(names, ", ")))
+			return
+		}
+		if highCostModels[name] && !(len(parts) >= 3 && parts[2] == "confirm") {
+			bot.SendMessage(chatID, fmt.Sprintf("%s is a high-cost model. Send /model %s confirm to proceed.", name, name))
 			return
 		}
 		history.SetModel(chatID, name)
@@ -195,6 +206,12 @@ func handleMessage(bot *TelegramBot, registry *ModelRegistry, history *History, 
 	}
 
 	response, err := registry.Chat(model, messages, chatID)
+	if err != nil && model != "gemma4" {
+		log.Printf("%s failed (%v), falling back to gemma4", model, err)
+		bot.SendMessage(chatID, fmt.Sprintf("%s failed: %v\nSwitching to gemma4.", model, err))
+		history.SetModel(chatID, "gemma4")
+		response, err = registry.Chat("gemma4", messages, chatID)
+	}
 	if err != nil {
 		log.Printf("llm error: %v", err)
 		bot.SendMessage(chatID, fmt.Sprintf("Error: %v", err))

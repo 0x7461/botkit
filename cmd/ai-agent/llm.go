@@ -27,7 +27,7 @@ type ModelRegistry struct {
 func NewRegistry() *ModelRegistry {
 	r := &ModelRegistry{
 		Models:       make(map[string]ModelEntry),
-		DefaultModel: "qwen3.5",
+		DefaultModel: "haiku",
 	}
 
 	// Ollama — always available

@@ -75,13 +75,11 @@ func (o *OllamaClient) Chat(model string, messages []ChatMessage, chatID int64) 
 }
 
 func (o *OllamaClient) DefaultModel() string {
-	return "qwen3.5:4b"
+	return "gemma4:e4b"
 }
 
 func (o *OllamaClient) Models() map[string]string {
 	return map[string]string{
-		"qwen3.5":  "qwen3.5:4b",
-		"coder":    "qwen2.5-coder:3b",
-		"deepseek": "deepseek-r1:1.5b",
+		"gemma4": "gemma4:e4b",
 	}
 }

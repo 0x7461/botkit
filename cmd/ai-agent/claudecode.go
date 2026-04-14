@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
@@ -33,12 +34,18 @@ func (c *ClaudeCodeClient) Chat(model string, messages []ChatMessage, chatID int
 		dir = home
 	}
 	cmd.Dir = dir
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
 	output, err := cmd.Output()
 	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			return "", fmt.Errorf("claude-code: %s", string(exitErr.Stderr))
+		msg := strings.TrimSpace(stderr.String())
+		if msg == "" {
+			msg = strings.TrimSpace(string(output))
 		}
-		return "", fmt.Errorf("claude-code: %w", err)
+		if msg == "" {
+			msg = err.Error()
+		}
+		return "", fmt.Errorf("claude-code: %s", msg)
 	}
 
 	return strings.TrimSpace(string(output)), nil

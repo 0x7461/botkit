@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -36,9 +37,13 @@ type Chat struct {
 	ID int64 `json:"id"`
 }
 
-func (b *TelegramBot) GetUpdates() ([]Update, error) {
+func (b *TelegramBot) GetUpdates(ctx context.Context) ([]Update, error) {
 	url := fmt.Sprintf("%s%s/getUpdates?timeout=30&offset=%d", telegramAPI, b.Token, b.Offset)
-	resp, err := telegramHTTPClient.Get(url)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := telegramHTTPClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
