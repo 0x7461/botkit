@@ -37,12 +37,19 @@ func mustNaggerConfigPath() string {
 	return p
 }
 
-func readNaggerConfig() (weekday, hour int, err error) {
+func fmtTZ(offset int) string {
+	if offset >= 0 {
+		return fmt.Sprintf("UTC+%d", offset)
+	}
+	return fmt.Sprintf("UTC%d", offset)
+}
+
+func readNaggerConfig() (weekday, hour, tzOffset int, err error) {
 	data, err := os.ReadFile(mustNaggerConfigPath())
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
-	weekday, hour = -1, -1
+	weekday, hour, tzOffset = -1, -1, 7 // default UTC+7
 	for _, line := range strings.Split(string(data), "\n") {
 		line = strings.TrimSpace(line)
 		if strings.HasPrefix(line, "#") || !strings.Contains(line, "=") {
@@ -61,21 +68,26 @@ func readNaggerConfig() (weekday, hour int, err error) {
 			weekday = n
 		case "reset_hour":
 			hour = n
+		case "reset_tz_offset":
+			tzOffset = n
 		}
 	}
 	if weekday < 0 || hour < 0 {
-		return 0, 0, fmt.Errorf("incomplete config")
+		return 0, 0, 0, fmt.Errorf("incomplete config")
 	}
-	return weekday, hour, nil
+	return weekday, hour, tzOffset, nil
 }
 
-func writeNaggerConfig(weekday, hour int) error {
+func writeNaggerConfig(weekday, hour, tzOffset int) error {
 	content := fmt.Sprintf(
 		"# Weekly reset time (when Anthropic resets the quota)\n"+
 			"# Update this if the reset time drifts\n"+
-			"reset_weekday = %d   # %s (Monday=0)\n"+
-			"reset_hour = %d\n",
-		weekday, dayLabels[weekday], hour,
+			"reset_weekday = %d    # %s (Monday=0)\n"+
+			"reset_hour = %d      # %d:00 %s\n"+
+			"reset_tz_offset = %d  # %s; default if omitted\n",
+		weekday, dayLabels[weekday],
+		hour, hour, fmtTZ(tzOffset),
+		tzOffset, fmtTZ(tzOffset),
 	)
 	return os.WriteFile(mustNaggerConfigPath(), []byte(content), 0644)
 }
@@ -85,14 +97,14 @@ func handleNagger(bot *TelegramBot, chatID int64, text string) {
 
 	// /nagger — show current
 	if len(parts) < 3 {
-		weekday, hour, err := readNaggerConfig()
+		weekday, hour, tzOffset, err := readNaggerConfig()
 		if err != nil {
 			bot.SendMessage(chatID, fmt.Sprintf("Error reading config: %v", err))
 			return
 		}
 		bot.SendMessage(chatID, fmt.Sprintf(
-			"Nagger reset: %s %d:00 KST\n\nUpdate: /nagger <day> <hour>\nExample: /nagger friday 20",
-			dayLabels[weekday], hour,
+			"Nagger reset: %s %d:00 %s\n\nUpdate: /nagger <day> <hour>\nExample: /nagger friday 19",
+			dayLabels[weekday], hour, fmtTZ(tzOffset),
 		))
 		return
 	}
@@ -111,11 +123,17 @@ func handleNagger(bot *TelegramBot, chatID int64, text string) {
 		return
 	}
 
-	if err := writeNaggerConfig(weekday, hour); err != nil {
+	_, _, tzOffset, err := readNaggerConfig()
+	if err != nil {
+		bot.SendMessage(chatID, fmt.Sprintf("Error reading config: %v", err))
+		return
+	}
+
+	if err := writeNaggerConfig(weekday, hour, tzOffset); err != nil {
 		bot.SendMessage(chatID, fmt.Sprintf("Error writing config: %v", err))
 		return
 	}
 
-	log.Printf("nagger reset updated: %s %d:00 KST", dayLabels[weekday], hour)
-	bot.SendMessage(chatID, fmt.Sprintf("Updated nagger reset to %s %d:00 KST.", dayLabels[weekday], hour))
+	log.Printf("nagger reset updated: %s %d:00 %s", dayLabels[weekday], hour, fmtTZ(tzOffset))
+	bot.SendMessage(chatID, fmt.Sprintf("Updated nagger reset to %s %d:00 %s.", dayLabels[weekday], hour, fmtTZ(tzOffset)))
 }
