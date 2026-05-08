@@ -1,0 +1,9 @@
+{
+  "source": {
+    "period": "weekly",
+    "summarize": true
+  },
+  "formatter": {
+    "title": "GitHub Trending — Weekly Report"
+  }
+}

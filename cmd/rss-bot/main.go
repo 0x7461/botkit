@@ -9,14 +9,13 @@ import (
 	"github.com/joho/godotenv"
 
 	"github.com/0x7461/botkit/bot"
+	"github.com/0x7461/botkit/config"
 	rssformatter "github.com/0x7461/botkit/formatters/rss"
 	"github.com/0x7461/botkit/senders/telegram"
 	"github.com/0x7461/botkit/sources/rss"
 )
 
-const maxDelivery = 50 // cap items per run to avoid flooding
-
-var feeds = []rss.FeedConfig{
+var defaultFeeds = []rss.FeedConfig{
 	{Name: "HN Best", URL: "https://hnrss.org/best", MaxItems: 10, DiscussionLabel: "HN"},
 	{Name: "Lobsters", URL: "https://lobste.rs/rss", MaxItems: 10},
 	{Name: "Techmeme", URL: "https://techmeme.com/feed.xml", MaxItems: 10},
@@ -28,6 +27,24 @@ func main() {
 	if err := godotenv.Load(); err != nil {
 		log.Println("No .env file found — using environment variables")
 	}
+
+	cfg := config.RssBotConfig{}
+	cfg.Source.MaxDelivery = 50
+	if err := config.Load("rss-bot", &cfg); err != nil {
+		log.Printf("Warning: could not load rss-bot config: %v", err)
+	}
+
+	feeds := defaultFeeds
+	if len(cfg.Source.Feeds) > 0 {
+		feeds = make([]rss.FeedConfig, len(cfg.Source.Feeds))
+		for i, f := range cfg.Source.Feeds {
+			feeds[i] = rss.FeedConfig{
+				Name: f.Name, URL: f.URL,
+				MaxItems: f.MaxItems, DiscussionLabel: f.DiscussionLabel,
+			}
+		}
+	}
+	maxDelivery := cfg.Source.MaxDelivery
 
 	// Deduplication DB
 	home, err := os.UserHomeDir()

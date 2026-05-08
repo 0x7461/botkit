@@ -7,11 +7,13 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/0x7461/botkit/bot"
+	"github.com/0x7461/botkit/compress"
 )
 
 // TrendingSource fetches trending repositories from GitHub.
 type TrendingSource struct {
-	Period string // "daily", "weekly", "monthly" — defaults to "weekly"
+	Period    string // "daily", "weekly", "monthly" — defaults to "weekly"
+	Summarize bool   // attach AI summary to each item via the summarize CLI
 }
 
 func (s *TrendingSource) Fetch() ([]bot.Item, error) {
@@ -51,6 +53,14 @@ func (s *TrendingSource) Fetch() ([]bot.Item, error) {
 			},
 		})
 	})
+
+	if s.Summarize {
+		for i := range items {
+			if summary := compress.Summarize(items[i].URL); summary != "" {
+				items[i].Meta["summary"] = summary
+			}
+		}
+	}
 
 	return items, nil
 }

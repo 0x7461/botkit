@@ -8,6 +8,7 @@ import (
 	"github.com/joho/godotenv"
 
 	"github.com/0x7461/botkit/bot"
+	"github.com/0x7461/botkit/config"
 	"github.com/0x7461/botkit/formatters/markdown"
 	github "github.com/0x7461/botkit/sources/github"
 	"github.com/0x7461/botkit/senders/telegram"
@@ -18,8 +19,16 @@ func main() {
 		log.Println("No .env file found — using environment variables")
 	}
 
-	source := &github.TrendingSource{Period: "weekly"}
-	formatter := &markdown.Formatter{Title: "GitHub Trending — Weekly Report"}
+	cfg := config.GhBotConfig{}
+	cfg.Source.Period = "weekly"
+	cfg.Source.Summarize = true
+	cfg.Formatter.Title = "GitHub Trending — Weekly Report"
+	if err := config.Load("gh-bot", &cfg); err != nil {
+		log.Printf("Warning: could not load gh-bot config: %v", err)
+	}
+
+	source := &github.TrendingSource{Period: cfg.Source.Period, Summarize: cfg.Source.Summarize}
+	formatter := &markdown.Formatter{Title: cfg.Formatter.Title}
 
 	if os.Getenv("ENABLE_TELEGRAM") != "true" {
 		// Dry run — fetch and print count only

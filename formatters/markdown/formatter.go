@@ -25,6 +25,9 @@ func (f *Formatter) Format(items []bot.Item) string {
 		if item.Description != "" {
 			sb.WriteString(fmt.Sprintf("%s\n\n", escapeHTML(item.Description)))
 		}
+		if summary := item.Meta["summary"]; summary != "" {
+			sb.WriteString(fmt.Sprintf("<i>%s</i>\n\n", escapeHTML(summary)))
+		}
 		if lang := item.Meta["language"]; lang != "" {
 			sb.WriteString(fmt.Sprintf("Language: <code>%s</code>\n", escapeHTML(lang)))
 		}
