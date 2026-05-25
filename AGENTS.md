@@ -1,6 +1,6 @@
 # AGENTS.md — botkit
 
-Updated: 2026-05-09
+Updated: 2026-05-25
 
 Lightweight Go framework for scheduled Telegram bots. Three interfaces (Source / Formatter / Sender) wired into one runner; each bot is its own binary on a runit + snooze schedule. Three bots ship: rss-bot (RSS digest), gh-bot (GitHub trending), ai-agent ("The Smartass" — multi-backend Telegram chat across Ollama / Claude Code CLI / Claude API).
 
@@ -34,6 +34,7 @@ go run ./cmd/rss-bot/
 
 ```
 bot/                              framework: Item, Source/Formatter/Sender, Bot runner
+bot/curate/                       rss-bot LLM ranking (claude -p + Ollama backends, ChainCurator)
 cmd/{rss-bot,gh-bot,ai-agent}/    bot entry points — one binary each
 sources/{rss,github}/             Source implementations (gofeed, goquery)
 formatters/{rss,markdown}/        Formatter implementations
@@ -60,7 +61,7 @@ External integration points:
 - `~/service/{github-trending,rss-bot,ai-agent}/` — runit user services.
 - `~/.local/share/botkit/rss-seen.db` — RSS dedup SQLite.
 - `~/.local/share/botkit/ai-agent.db` — chat history; `recap.py` reads it for the Telegram section.
-- `~/.config/botkit/<bot>.json` — per-bot config overrides (period, summarize, feed list, max_delivery).
+- `~/.config/botkit/<bot>.json` — per-bot config overrides (period, summarize, feed list, max_delivery, rss-bot `curate` block).
 - `~/projects/nagger/config.toml` — written by `/nagger` Telegram command (cross-project edit).
 
 ## Boundaries & gotchas
@@ -77,6 +78,7 @@ External integration points:
 - **Don't merge bot binaries.** Separate concerns (schedule, token, .env scope, lifecycle).
 - **Don't use `cmd.Output()` for `claude -p` invocations.** When CC quota expires, `claude -p` writes the error to **stdout, not stderr**. `cmd.Output()` discards stdout on error → empty error message. Use an explicit `bytes.Buffer` for stderr and fall back to stdout content if stderr is empty. See `cmd/ai-agent/claudecode.go`.
 - **Don't bundle gh-bot's RSS feeds with rss-bot.** gh-bot is GitHub-trending-only; rss-bot is RSS-only. They run on different schedules and use different formatters.
+- **Don't pass `--bare` to `claude -p`** in `bot/curate/`. `--bare` skips not just CLAUDE.md/settings but also auth discovery → "Not logged in" failure. Caught 2026-05-25 when first wiring rss-bot curation.
 
 **Ask first:**
 - Adding a new bot binary. Comes with runit service setup, BotFather token, schedule decision — discuss in PLAN.md `## Decisions` first.
