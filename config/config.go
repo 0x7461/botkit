@@ -14,6 +14,18 @@ type FeedEntry struct {
 	URL             string `json:"url"`
 	MaxItems        int    `json:"max_items"`
 	DiscussionLabel string `json:"discussion_label,omitempty"`
+	SkipCurate      bool   `json:"skip_curate,omitempty"`
+}
+
+// CurateConfig controls the LLM ranking pass between dedup and send.
+type CurateConfig struct {
+	Enabled         bool   `json:"enabled"`
+	Target          int    `json:"target"`            // how many items to keep after ranking
+	Backend         string `json:"backend"`           // "claude-code" or "ollama"
+	Model           string `json:"model"`             // backend-specific model id
+	FallbackBackend string `json:"fallback_backend"`  // optional second backend
+	FallbackModel   string `json:"fallback_model"`
+	TimeoutSeconds  int    `json:"timeout_seconds"`   // per-backend wall-clock cap
 }
 
 // GhBotConfig holds configuration for the GitHub trending bot.
@@ -30,8 +42,9 @@ type GhBotConfig struct {
 // RssBotConfig holds configuration for the RSS digest bot.
 type RssBotConfig struct {
 	Source struct {
-		MaxDelivery int         `json:"max_delivery"`
-		Feeds       []FeedEntry `json:"feeds"`
+		MaxDelivery int          `json:"max_delivery"`
+		Feeds       []FeedEntry  `json:"feeds"`
+		Curate      CurateConfig `json:"curate"`
 	} `json:"source"`
 }
 

@@ -14,6 +14,7 @@ type FeedConfig struct {
 	URL             string
 	MaxItems        int    // max items to return per fetch (default 5)
 	DiscussionLabel string // label for discussion link when guid != link (e.g. "HN")
+	SkipCurate      bool   // if true, bypass LLM ranking; items always appear in the digest
 }
 
 // RSSSource fetches items from a list of RSS/Atom feeds.
@@ -60,6 +61,9 @@ func (s *RSSSource) Fetch() ([]bot.Item, error) {
 			meta := map[string]string{
 				"feed": feed.Name,
 				"guid": guid,
+			}
+			if feed.SkipCurate {
+				meta["skip_curate"] = "true"
 			}
 			if guid != entry.Link && strings.HasPrefix(guid, "http") {
 				label := feed.DiscussionLabel

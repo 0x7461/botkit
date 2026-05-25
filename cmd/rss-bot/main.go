@@ -5,10 +5,12 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/joho/godotenv"
 
 	"github.com/0x7461/botkit/bot"
+	"github.com/0x7461/botkit/bot/curate"
 	"github.com/0x7461/botkit/config"
 	rssformatter "github.com/0x7461/botkit/formatters/rss"
 	"github.com/0x7461/botkit/senders/telegram"
@@ -39,8 +41,11 @@ func main() {
 		feeds = make([]rss.FeedConfig, len(cfg.Source.Feeds))
 		for i, f := range cfg.Source.Feeds {
 			feeds[i] = rss.FeedConfig{
-				Name: f.Name, URL: f.URL,
-				MaxItems: f.MaxItems, DiscussionLabel: f.DiscussionLabel,
+				Name:            f.Name,
+				URL:             f.URL,
+				MaxItems:        f.MaxItems,
+				DiscussionLabel: f.DiscussionLabel,
+				SkipCurate:      f.SkipCurate,
 			}
 		}
 	}
@@ -64,27 +69,55 @@ func main() {
 	if err != nil {
 		log.Fatalf("fetch: %v", err)
 	}
+	fetched := len(items)
 
 	// Filter seen
 	unseen, err := dedup.Filter(items)
 	if err != nil {
 		log.Fatalf("dedup filter: %v", err)
 	}
+	fmt.Printf("fetched %d, deduped to %d\n", fetched, len(unseen))
 
-	// Cap to avoid flooding after outage / first run
-	if len(unseen) > maxDelivery {
-		unseen = unseen[:maxDelivery]
+	// Split: skip_curate feeds always shipped; rest go through the LLM ranker.
+	var blogs, curatable []bot.Item
+	for _, it := range unseen {
+		if it.Meta["skip_curate"] == "true" {
+			blogs = append(blogs, it)
+		} else {
+			curatable = append(curatable, it)
+		}
 	}
 
-	if len(unseen) == 0 {
+	// Curate (or pass-through on failure)
+	picks := curatable
+	if cfg.Source.Curate.Enabled && len(curatable) > 0 {
+		curator := buildCurator(cfg.Source.Curate)
+		if curator != nil {
+			ranked, err := curator.Curate(curatable, cfg.Source.Curate.Target)
+			if err != nil {
+				fmt.Printf("curate: all backends failed, passing through %d items: %v\n", len(curatable), err)
+			} else {
+				picks = ranked
+			}
+		}
+	}
+
+	final := append(blogs, picks...)
+
+	// Cap to avoid flooding after outage / first run / curation pass-through
+	if len(final) > maxDelivery {
+		final = final[:maxDelivery]
+	}
+
+	if len(final) == 0 {
 		fmt.Println("No new items — nothing to send.")
 		return
 	}
 
-	fmt.Printf("Found %d new items across %d feeds.\n", len(unseen), len(feeds))
+	fmt.Printf("delivering: %d blogs + %d picks = %d items\n", len(blogs), len(picks), len(final))
 
 	if os.Getenv("ENABLE_TELEGRAM") != "true" {
-		for _, item := range unseen {
+		for _, item := range final {
 			fmt.Printf("[%s] %s\n  %s\n", item.Meta["feed"], item.Title, item.URL)
 		}
 		fmt.Println("(Telegram disabled — set ENABLE_TELEGRAM=true to send)")
@@ -106,7 +139,7 @@ func main() {
 	formatter := &rssformatter.Formatter{}
 	sender := &telegram.Sender{Token: token, ChatID: chatID}
 
-	messages := formatter.FormatAll(unseen)
+	messages := formatter.FormatAll(final)
 	for _, msg := range messages {
 		if err := sender.Send(msg); err != nil {
 			log.Fatalf("send: %v", err)
@@ -114,9 +147,43 @@ func main() {
 	}
 
 	// Only mark seen after successful delivery
-	if err := dedup.MarkSeen(unseen); err != nil {
+	if err := dedup.MarkSeen(final); err != nil {
 		log.Printf("warning: failed to mark items seen: %v", err)
 	}
 
-	fmt.Printf("[OK] Delivered %d items.\n", len(unseen))
+	fmt.Printf("[OK] Delivered %d items in %d messages.\n", len(final), len(messages))
+}
+
+func buildCurator(cc config.CurateConfig) curate.Curator {
+	timeout := time.Duration(cc.TimeoutSeconds) * time.Second
+	if timeout <= 0 {
+		timeout = 60 * time.Second
+	}
+	primary := backendFor(cc.Backend, cc.Model, timeout)
+	fallback := backendFor(cc.FallbackBackend, cc.FallbackModel, timeout)
+	switch {
+	case primary == nil && fallback == nil:
+		fmt.Println("curate: no backend configured, skipping")
+		return nil
+	case fallback == nil:
+		return &curate.ChainCurator{Curators: []curate.Curator{primary}}
+	case primary == nil:
+		return &curate.ChainCurator{Curators: []curate.Curator{fallback}}
+	}
+	return &curate.ChainCurator{Curators: []curate.Curator{primary, fallback}}
+}
+
+func backendFor(name, model string, timeout time.Duration) curate.Curator {
+	if name == "" || model == "" {
+		return nil
+	}
+	switch name {
+	case "claude-code":
+		return &curate.ClaudeCodeCurator{Model: model, Timeout: timeout}
+	case "ollama":
+		return &curate.OllamaCurator{Model: model, Timeout: timeout}
+	default:
+		fmt.Printf("curate: unknown backend %q, skipping\n", name)
+		return nil
+	}
 }
