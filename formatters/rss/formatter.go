@@ -41,10 +41,32 @@ func (f *Formatter) FormatAll(items []bot.Item) []string {
 
 	var out []string
 	if len(blogs) > 0 {
-		out = append(out, splitMessage(blogsHeader, renderLines(blogs))...)
+		out = append(out, splitMessage(blogsHeader, renderLines(clusterByFeed(blogs)))...)
 	}
 	if len(picks) > 0 {
-		out = append(out, splitMessage(picksHeader, renderLines(picks))...)
+		out = append(out, splitMessage(picksHeader, renderLines(clusterByFeed(picks)))...)
+	}
+	return out
+}
+
+// clusterByFeed groups items from the same feed together while preserving
+// the relative order of feeds based on first appearance in the input.
+// e.g. [HN-A, Simon-X, HN-B, Hackaday-1] -> [HN-A, HN-B, Simon-X, Hackaday-1].
+// This keeps the curator's ranking signal (best feed first) without scattering
+// same-source items across the message.
+func clusterByFeed(items []bot.Item) []bot.Item {
+	var feedOrder []string
+	groups := map[string][]bot.Item{}
+	for _, it := range items {
+		feed := it.Meta["feed"]
+		if _, ok := groups[feed]; !ok {
+			feedOrder = append(feedOrder, feed)
+		}
+		groups[feed] = append(groups[feed], it)
+	}
+	out := make([]bot.Item, 0, len(items))
+	for _, feed := range feedOrder {
+		out = append(out, groups[feed]...)
 	}
 	return out
 }
