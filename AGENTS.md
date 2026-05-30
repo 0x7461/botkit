@@ -1,6 +1,6 @@
 # AGENTS.md — botkit
 
-Updated: 2026-05-25
+Updated: 2026-05-30
 
 Lightweight Go framework for scheduled Telegram bots. Three interfaces (Source / Formatter / Sender) wired into one runner; each bot is its own binary on a runit + snooze schedule. Three bots ship: rss-bot (RSS digest), gh-bot (GitHub trending), ai-agent ("The Smartass" — multi-backend Telegram chat across Ollama / Claude Code CLI / Claude API).
 
@@ -12,6 +12,14 @@ Audience: agents editing this repo. Framework overview + bot list in `README.md`
 go mod download
 cp .env.example .env   # fill BOT_*__TOKEN / BOT_*__CHAT; set ENABLE_TELEGRAM=true
 ```
+
+## Services
+
+Declared runtime state — reconciled against `sv status` + `down` sentinels by `maint-watch doctor` and the weekly maint-watch scan (`service.claim_*` findings). `persistent` = must be up and survive reboot.
+
+- `ai-agent`: persistent — always-on agent daemon (`bin/ai-agent`)
+- `github-trending`: persistent — weekly Sat 10:00 gh-bot (`snooze -w6 -H10`)
+- `rss-bot`: persistent — daily 12:00 RSS digest (`snooze -H12`)
 
 ## Commands
 
