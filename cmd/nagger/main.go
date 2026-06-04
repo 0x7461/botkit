@@ -21,7 +21,6 @@ import (
 	"github.com/0x7461/botkit/bot"
 	"github.com/0x7461/botkit/config"
 	"github.com/0x7461/botkit/senders/telegram"
-	"github.com/joho/godotenv"
 )
 
 // Pace cycle: index = day-1 → (label, target % weekly usage by end of that day).
@@ -112,9 +111,7 @@ func todayInTZ(tzOffset int) string {
 }
 
 func main() {
-	for _, f := range []string{".env.nagger", ".env"} {
-		_ = godotenv.Load(f) // tolerate missing; first-wins (per-bot overrides umbrella)
-	}
+	bot.LoadEnv("nagger")
 
 	cfg := config.NaggerConfig{ResetWeekday: 0, ResetHour: 11, ResetTZOffset: 7} // migrated defaults
 	if err := config.Load("nagger", &cfg); err != nil {

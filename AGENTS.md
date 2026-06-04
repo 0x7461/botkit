@@ -10,8 +10,12 @@ Audience: agents editing this repo. Framework overview + bot list in `README.md`
 
 ```bash
 go mod download
-cp .env.example .env   # fill BOT_*__TOKEN / BOT_*__CHAT; set ENABLE_TELEGRAM=true
+cp .env.example .env   # umbrella (shared): ENABLE_TELEGRAM=true, TELEGRAM_*, GMAIL_*
+# per-bot secrets go in .env.<name> (.env.ai, .env.gh, .env.rss, .env.nagger):
+#   BOT_<NAME>__TOKEN / BOT_<NAME>__CHAT (+ AI_TOOLS_SECRET for ai)
 ```
+
+Each bot loads `.env.<name>` then the umbrella `.env` via `bot.LoadEnv(name)` (first-wins: per-bot overrides shared). All `.env*` except `.env.example` are gitignored.
 
 ## Services
 
@@ -81,7 +85,7 @@ External integration points:
 - **`cd /path/to/project` before `exec` in runit `run` scripts.** runit doesn't set CWD; `godotenv.Load()` won't find `.env` without it.
 - **Rebuild AND restart after code changes:** `go build -o bin/<bot> ./cmd/<bot>/` AND `SVDIR=~/service sv restart <bot>`. runit runs the pre-built binary from `bin/`, not `go run`. Stale binaries silently serve old behavior — hit production 2026-03-13 (formatter rewritten 2026-03-09, binary still from 2026-03-07).
 - **One binary per bot.** Different schedules, different tokens, different lifecycles. Don't bundle.
-- **Use `BOT_<NAME>__TOKEN` / `BOT_<NAME>__CHAT`** for per-bot Telegram credentials; falls back to generic `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` if unset. Each bot ideally has its own BotFather token.
+- **Use `BOT_<NAME>__TOKEN` / `BOT_<NAME>__CHAT`** for per-bot Telegram credentials; falls back to generic `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` if unset. Each bot ideally has its own BotFather token. Per-bot secrets live in `.env.<name>`, shared values in the umbrella `.env`; both loaded via `bot.LoadEnv(name)`.
 - **Pass a cancelable `context.Context` into long-poll HTTP calls.** Signal handler cancels it; otherwise SIGTERM takes up to 30s to land (long-poll holds the process open). See `cmd/ai-agent/telegram.go`.
 
 **Never do:**

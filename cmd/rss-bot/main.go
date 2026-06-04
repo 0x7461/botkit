@@ -7,8 +7,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/joho/godotenv"
-
 	"github.com/0x7461/botkit/bot"
 	"github.com/0x7461/botkit/bot/curate"
 	"github.com/0x7461/botkit/config"
@@ -26,9 +24,7 @@ var defaultFeeds = []rss.FeedConfig{
 }
 
 func main() {
-	if err := godotenv.Load(); err != nil {
-		log.Println("No .env file found — using environment variables")
-	}
+	bot.LoadEnv("rss")
 
 	cfg := config.RssBotConfig{}
 	cfg.Source.MaxDelivery = 50

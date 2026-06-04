@@ -1,6 +1,10 @@
 package bot
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/joho/godotenv"
+)
 
 // Item is a generic piece of content returned by a Source.
 type Item struct {
@@ -30,6 +34,15 @@ type Bot struct {
 	Source    Source
 	Formatter Formatter
 	Sender    Sender
+}
+
+// LoadEnv loads the per-bot then the umbrella .env from the working directory,
+// tolerating missing files. First-wins: values in .env.<name> take precedence
+// over the shared .env (godotenv never overrides an already-set var).
+func LoadEnv(name string) {
+	for _, f := range []string{".env." + name, ".env"} {
+		_ = godotenv.Load(f)
+	}
 }
 
 // FirstNonEmpty returns the first non-empty string from the arguments.

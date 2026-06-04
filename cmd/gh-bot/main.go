@@ -5,8 +5,6 @@ import (
 	"log"
 	"os"
 
-	"github.com/joho/godotenv"
-
 	"github.com/0x7461/botkit/bot"
 	"github.com/0x7461/botkit/config"
 	"github.com/0x7461/botkit/formatters/markdown"
@@ -15,9 +13,7 @@ import (
 )
 
 func main() {
-	if err := godotenv.Load(); err != nil {
-		log.Println("No .env file found — using environment variables")
-	}
+	bot.LoadEnv("gh")
 
 	cfg := config.GhBotConfig{}
 	cfg.Source.Period = "weekly"

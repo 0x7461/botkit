@@ -12,15 +12,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/joho/godotenv"
+	"github.com/0x7461/botkit/bot"
 )
 
 const contextWindow = 20
 
 func main() {
-	if err := godotenv.Load(); err != nil {
-		log.Println("No .env file found — using environment variables")
-	}
+	bot.LoadEnv("ai")
 
 	token := os.Getenv("BOT_AI__TOKEN")
 	if token == "" {
