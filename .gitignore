@@ -1,5 +1,7 @@
 # Environment variables (sensitive!)
 .env
+.env.*
+!.env.example
 
 # Build output
 bin/

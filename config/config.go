@@ -48,6 +48,15 @@ type RssBotConfig struct {
 	} `json:"source"`
 }
 
+// NaggerConfig holds the weekly-quota-reset anchor for the nagger bot.
+// Used only by the fallback cycle-day calc; the live path prefers the API's
+// resets_at from ~/.local/share/nagger/rate-limits.json.
+type NaggerConfig struct {
+	ResetWeekday  int `json:"reset_weekday"`  // Monday=0
+	ResetHour     int `json:"reset_hour"`     // 0-23
+	ResetTZOffset int `json:"reset_tz_offset"` // hours from UTC
+}
+
 // Load reads ~/.config/botkit/<name>.json into v.
 // If the file does not exist, v is unchanged and nil is returned.
 func Load(name string, v any) error {
@@ -60,6 +69,19 @@ func Load(name string, v any) error {
 		return err
 	}
 	return json.Unmarshal(data, v)
+}
+
+// Save writes v as JSON to ~/.config/botkit/<name>.json, creating the dir.
+func Save(name string, v any) error {
+	d := dir()
+	if err := os.MkdirAll(d, 0o755); err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(d, name+".json"), append(data, '\n'), 0o644)
 }
 
 func dir() string {

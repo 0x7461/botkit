@@ -3,10 +3,10 @@ package main
 import (
 	"fmt"
 	"log"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/0x7461/botkit/config"
 )
 
 var dayNames = map[string]int{
@@ -21,22 +21,6 @@ var dayNames = map[string]int{
 
 var dayLabels = []string{"Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"}
 
-func naggerConfigPath() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("cannot determine home directory: %w", err)
-	}
-	return filepath.Join(home, "projects", "nagger", "config.toml"), nil
-}
-
-func mustNaggerConfigPath() string {
-	p, err := naggerConfigPath()
-	if err != nil {
-		log.Fatalf("%v", err)
-	}
-	return p
-}
-
 func fmtTZ(offset int) string {
 	if offset >= 0 {
 		return fmt.Sprintf("UTC+%d", offset)
@@ -44,52 +28,22 @@ func fmtTZ(offset int) string {
 	return fmt.Sprintf("UTC%d", offset)
 }
 
+// Config lives at ~/.config/botkit/nagger.json (shared with cmd/nagger).
+// Defaults match the migrated values; a missing file leaves them in place.
 func readNaggerConfig() (weekday, hour, tzOffset int, err error) {
-	data, err := os.ReadFile(mustNaggerConfigPath())
-	if err != nil {
+	cfg := config.NaggerConfig{ResetWeekday: 0, ResetHour: 11, ResetTZOffset: 7}
+	if err := config.Load("nagger", &cfg); err != nil {
 		return 0, 0, 0, err
 	}
-	weekday, hour, tzOffset = -1, -1, 7 // default UTC+7
-	for _, line := range strings.Split(string(data), "\n") {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "#") || !strings.Contains(line, "=") {
-			continue
-		}
-		k, v, _ := strings.Cut(line, "=")
-		k = strings.TrimSpace(k)
-		v = strings.TrimSpace(v)
-		// strip inline comment
-		if i := strings.Index(v, "#"); i >= 0 {
-			v = strings.TrimSpace(v[:i])
-		}
-		n, _ := strconv.Atoi(v)
-		switch k {
-		case "reset_weekday":
-			weekday = n
-		case "reset_hour":
-			hour = n
-		case "reset_tz_offset":
-			tzOffset = n
-		}
-	}
-	if weekday < 0 || hour < 0 {
-		return 0, 0, 0, fmt.Errorf("incomplete config")
-	}
-	return weekday, hour, tzOffset, nil
+	return cfg.ResetWeekday, cfg.ResetHour, cfg.ResetTZOffset, nil
 }
 
 func writeNaggerConfig(weekday, hour, tzOffset int) error {
-	content := fmt.Sprintf(
-		"# Weekly reset time (when Anthropic resets the quota)\n"+
-			"# Update this if the reset time drifts\n"+
-			"reset_weekday = %d    # %s (Monday=0)\n"+
-			"reset_hour = %d      # %d:00 %s\n"+
-			"reset_tz_offset = %d  # %s; default if omitted\n",
-		weekday, dayLabels[weekday],
-		hour, hour, fmtTZ(tzOffset),
-		tzOffset, fmtTZ(tzOffset),
-	)
-	return os.WriteFile(mustNaggerConfigPath(), []byte(content), 0644)
+	return config.Save("nagger", config.NaggerConfig{
+		ResetWeekday:  weekday,
+		ResetHour:     hour,
+		ResetTZOffset: tzOffset,
+	})
 }
 
 func handleNagger(bot *TelegramBot, chatID int64, text string) {

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -37,15 +38,25 @@ type Chat struct {
 	ID int64 `json:"id"`
 }
 
+// scrub removes the bot token from an error string. Go's net/http wraps the
+// request URL (which carries the token in its path) into *url.Error, so a bare
+// network error would otherwise log the token. See secret-audit #47.
+func (b *TelegramBot) scrub(err error) error {
+	if err == nil {
+		return nil
+	}
+	return errors.New(strings.ReplaceAll(err.Error(), b.Token, "<redacted>"))
+}
+
 func (b *TelegramBot) GetUpdates(ctx context.Context) ([]Update, error) {
 	url := fmt.Sprintf("%s%s/getUpdates?timeout=30&offset=%d", telegramAPI, b.Token, b.Offset)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return nil, err
+		return nil, b.scrub(err)
 	}
 	resp, err := telegramHTTPClient.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, b.scrub(err)
 	}
 	defer resp.Body.Close()
 
@@ -80,7 +91,7 @@ func (b *TelegramBot) sendChunk(chatID int64, text string) error {
 	})
 	resp, err := telegramHTTPClient.Post(url, "application/json", strings.NewReader(string(payload)))
 	if err != nil {
-		return err
+		return b.scrub(err)
 	}
 	defer resp.Body.Close()
 

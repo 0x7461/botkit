@@ -2,7 +2,7 @@
 
 Updated: 2026-05-30
 
-Lightweight Go framework for scheduled Telegram bots. Three interfaces (Source / Formatter / Sender) wired into one runner; each bot is its own binary on a runit + snooze schedule. Three bots ship: rss-bot (RSS digest), gh-bot (GitHub trending), ai-agent ("The Smartass" — multi-backend Telegram chat across Ollama / Claude Code CLI / Claude API).
+Lightweight Go framework for scheduled Telegram bots. Three interfaces (Source / Formatter / Sender) wired into one runner; each bot is its own binary on a runit + snooze schedule. Four binaries ship: rss-bot (RSS digest), gh-bot (GitHub trending), ai-agent ("The Smartass" — multi-backend Telegram chat across Ollama / Claude Code CLI / Claude API), and nagger (one-shot daily Claude-quota pace nudge — uses `senders/telegram` directly rather than the Source/Formatter runner).
 
 Audience: agents editing this repo. Framework overview + bot list in `README.md`. Decisions, internals, history in `PLAN.md` (local-only — gitignored).
 
@@ -20,6 +20,7 @@ Declared runtime state — reconciled against `sv status` + `down` sentinels by 
 - `ai-agent`: persistent — always-on agent daemon (`bin/ai-agent`)
 - `github-trending`: persistent — weekly Sat 10:00 gh-bot (`snooze -w6 -H10`)
 - `rss-bot`: persistent — daily 12:00 RSS digest (`snooze -H12`)
+- `nagger`: persistent — hourly 08–22 Claude-quota pace nudge (`snooze -H8-22 ./bin/nagger`), dedup'd to one msg/day
 
 ## Commands
 
@@ -43,7 +44,7 @@ go run ./cmd/rss-bot/
 ```
 bot/                              framework: Item, Source/Formatter/Sender, Bot runner
 bot/curate/                       rss-bot LLM ranking (claude -p + Ollama backends, ChainCurator)
-cmd/{rss-bot,gh-bot,ai-agent}/    bot entry points — one binary each
+cmd/{rss-bot,gh-bot,ai-agent,nagger}/  bot entry points — one binary each
 sources/{rss,github}/             Source implementations (gofeed, goquery)
 formatters/{rss,markdown}/        Formatter implementations
 senders/telegram/                 Telegram sender + GetChatID helper
@@ -62,7 +63,7 @@ cmd/ai-agent/
 ├── claude.go      Claude API key backend
 ├── telegram.go    long-polling + send (cancelable context)
 ├── history.go     SQLite conversation history
-└── nagger.go      /nagger command — reads/writes ~/projects/nagger/config.toml
+└── nagger.go      /nagger command — reads/writes ~/.config/botkit/nagger.json (shared with cmd/nagger)
 ```
 
 External integration points:
@@ -70,7 +71,8 @@ External integration points:
 - `~/.local/share/botkit/rss-seen.db` — RSS dedup SQLite.
 - `~/.local/share/botkit/ai-agent.db` — chat history; `recap.py` reads it for the Telegram section.
 - `~/.config/botkit/<bot>.json` — per-bot config overrides (period, summarize, feed list, max_delivery, rss-bot `curate` block).
-- `~/projects/nagger/config.toml` — written by `/nagger` Telegram command (cross-project edit).
+- `~/.config/botkit/nagger.json` — shared nagger schedule config; written by `/nagger`, read by `cmd/nagger`.
+- `~/.local/share/nagger/{rate-limits.json,last-sent}` — nagger pace cache (`rate-limits.json` written by `~/.claude/statusline.sh` every CC response — external, don't move) + daily dedup state.
 
 ## Boundaries & gotchas
 
@@ -93,7 +95,7 @@ External integration points:
 - Switching ai-agent default model. The model guard requires `/model <name> confirm` for sonnet/opus; agents shouldn't bypass it.
 
 **Untested / known-fragile:**
-- Recovery path when `~/projects/nagger/config.toml` is malformed by `/nagger`. The command writes valid TOML on success, but error paths haven't been exercised.
+- Recovery path when `~/.config/botkit/nagger.json` is malformed by `/nagger`. The command writes valid JSON on success, but error paths haven't been exercised.
 
 ## ai-agent backends
 
@@ -118,4 +120,4 @@ DB: `~/.local/share/botkit/ai-agent.db`. The `messages` table has a `model` colu
 - **`PLAN.md ## Decisions`** (local-only) — architectural choices: separate binaries, snooze+runit scheduling, three-interface split.
 - **`PLAN.md ## Internals`** — model-guard rationale, recap integration, dotenv/runit interaction details.
 - **`PLAN.md ## History`** — what shipped when, including 2026-03-13 Opus code-review hardening (20 issues fixed in one commit, `b10018a`).
-- **`~/projects/nagger/`** — companion project; `cmd/ai-agent/nagger.go` cross-edits its `config.toml`.
+- **`cmd/nagger/`** — quota-pace nudge, folded in 2026-06-05 (was the standalone `~/projects/nagger` Python project). Shares `~/.config/botkit/nagger.json` with ai-agent's `/nagger`.

@@ -102,7 +102,8 @@ func (s *Sender) sendChunk(message string) error {
 
 	resp, err := senderHTTPClient.Post(apiURL, "application/json", strings.NewReader(string(payload)))
 	if err != nil {
-		return fmt.Errorf("failed to send message: %w", err)
+		// Scrub the token: net/http wraps the request URL (token in path) into the error. See secret-audit #47.
+		return fmt.Errorf("failed to send message: %s", strings.ReplaceAll(err.Error(), s.Token, "<redacted>"))
 	}
 	defer resp.Body.Close()
 
