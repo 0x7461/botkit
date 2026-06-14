@@ -24,13 +24,13 @@ Adding a new bot = implement `Source`, pick a `Formatter` and `Sender`, pass to 
 
 - **rss-bot** — RSS feed aggregator. HN Best, Lobsters, Techmeme, blogs. SQLite dedup. Runs twice daily.
 - **gh-bot** — GitHub trending repos (weekly). Scrapes trending page via goquery. Runs weekly.
-- **ai-agent** — Telegram AI assistant ("The Smartass"). Multi-backend: Ollama, Claude Code CLI, Claude API. Persistent chat history, `/model` switching, tool access.
+- **nagger** — daily Claude-quota pace nudge. One-shot, hourly 08–22, dedup'd to one message/day.
 
 ## Project Structure
 
 ```
 bot/                        — framework: interfaces + Bot runner
-cmd/{rss-bot,gh-bot,ai-agent}/ — bot entry points
+cmd/{rss-bot,gh-bot,nagger}/ — bot entry points
 sources/{rss,github}/       — Source implementations
 formatters/{rss,markdown}/  — Formatter implementations
 senders/telegram/           — Telegram sender (HTML, message splitting)
@@ -45,4 +45,4 @@ Copy `.env.example` to `.env` and fill in bot tokens and chat IDs. Each bot can 
 - [goquery](https://github.com/PuerkitoBio/goquery) — HTML parsing (GitHub trending)
 - [gofeed](https://github.com/mmcdole/gofeed) — RSS/Atom feed parsing
 - [godotenv](https://github.com/joho/godotenv) — .env loading
-- [go-sqlite3](https://github.com/mattn/go-sqlite3) — SQLite (RSS dedup, ai-agent history)
+- [go-sqlite3](https://github.com/mattn/go-sqlite3) — SQLite (RSS dedup)

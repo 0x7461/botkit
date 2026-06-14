@@ -5,7 +5,6 @@
 
 # Build output
 bin/
-/ai-agent
 *.exe
 *.out
 
