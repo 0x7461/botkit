@@ -62,7 +62,7 @@ bin/                              built binaries (gitignored)
 External integration points:
 - `~/service/{scout,rss-bot,nagger}/` — runit user services.
 - `~/.local/share/botkit/rss-seen.db` — RSS dedup SQLite.
-- `~/.config/botkit/<bot>.json` — per-bot config overrides (scout: period/summarize/limit + hn block; rss-bot: feed list, max_delivery, `curate` block, `summarize` block — per-item one-line summaries, sonnet, off unless `enabled`).
+- `~/.config/botkit/<bot>.json` — per-bot config overrides (scout: period/summarize/limit + hn block; rss-bot: feed list, max_delivery, `curate` block, `summarize` block — per-item one-line summaries, sonnet, off unless `enabled`). **`rss-bot.json` is chezmoi-managed** — `chezmoi re-add ~/.config/botkit/rss-bot.json` after editing it live, or the source drifts (scout/nagger json are not tracked).
 - `~/.config/botkit/nagger.json` — nagger schedule config, read by `cmd/nagger`. Hand-edited (was written by ai-agent's `/nagger` before that bot's retirement).
 - `~/.local/share/nagger/{rate-limits.json,last-sent}` — nagger pace cache (`rate-limits.json` written by `~/.claude/statusline.sh` every CC response — external, don't move) + daily dedup state.
 
