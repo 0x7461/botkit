@@ -14,6 +14,7 @@ import (
 type TrendingSource struct {
 	Period    string // "daily", "weekly", "monthly" — defaults to "weekly"
 	Summarize bool   // attach AI summary to each item via the summarize CLI
+	Limit     int    // keep only the top N (by trending rank); 0 = no cap
 }
 
 func (s *TrendingSource) Fetch() ([]bot.Item, error) {
@@ -53,6 +54,10 @@ func (s *TrendingSource) Fetch() ([]bot.Item, error) {
 			},
 		})
 	})
+
+	if s.Limit > 0 && len(items) > s.Limit {
+		items = items[:s.Limit]
+	}
 
 	if s.Summarize {
 		for i := range items {

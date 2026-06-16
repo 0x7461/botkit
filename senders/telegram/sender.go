@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/0x7461/botkit/bot"
 )
 
 var senderHTTPClient = &http.Client{Timeout: 30 * time.Second}
@@ -21,9 +23,17 @@ const telegramMaxLen = 4096
 const repoSeparator = "\n---\n\n"
 
 func (s *Sender) Send(message string) error {
-	for _, chunk := range splitMessage(message) {
-		if err := s.sendChunk(chunk); err != nil {
-			return err
+	// Hard breaks (bot.MessageBreak) start a new message; each part is then
+	// length-split as needed.
+	for _, part := range strings.Split(message, bot.MessageBreak) {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		for _, chunk := range splitMessage(part) {
+			if err := s.sendChunk(chunk); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

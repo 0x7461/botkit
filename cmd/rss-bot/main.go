@@ -110,11 +110,26 @@ func main() {
 		return
 	}
 
+	// Per-item one-line summaries (best-effort; digest ships unchanged on failure).
+	if cfg.Source.Summarize.Enabled {
+		model := cfg.Source.Summarize.Model
+		if model == "" {
+			model = "sonnet"
+		}
+		timeout := time.Duration(cfg.Source.Summarize.TimeoutSeconds) * time.Second
+		if timeout <= 0 {
+			timeout = 120 * time.Second
+		}
+		curate.Summarize(final, model, timeout)
+	}
+
 	fmt.Printf("delivering: %d blogs + %d picks = %d items\n", len(blogs), len(picks), len(final))
 
 	if os.Getenv("ENABLE_TELEGRAM") != "true" {
-		for _, item := range final {
-			fmt.Printf("[%s] %s\n  %s\n", item.Meta["feed"], item.Title, item.URL)
+		formatter := &rssformatter.Formatter{}
+		for _, msg := range formatter.FormatAll(final) {
+			fmt.Println(msg)
+			fmt.Println("———")
 		}
 		fmt.Println("(Telegram disabled — set ENABLE_TELEGRAM=true to send)")
 		return

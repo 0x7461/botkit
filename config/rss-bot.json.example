@@ -7,6 +7,11 @@
       {"name": "Techmeme", "url": "https://techmeme.com/feed.xml", "max_items": 10},
       {"name": "Dan Luu", "url": "https://danluu.com/atom.xml", "max_items": 5},
       {"name": "Julia Evans", "url": "https://jvns.ca/atom.xml", "max_items": 5}
-    ]
+    ],
+    "summarize": {
+      "enabled": true,
+      "model": "sonnet",
+      "timeout_seconds": 120
+    }
   }
 }

@@ -6,6 +6,12 @@ import (
 	"github.com/joho/godotenv"
 )
 
+// MessageBreak is a formatter-emitted sentinel marking a hard message boundary:
+// a Sender should start a new message here rather than only splitting on length.
+// Senders without multi-message output may strip it. The byte sequence is chosen
+// not to occur in normal digest text.
+const MessageBreak = "\x00\x00BREAK\x00\x00"
+
 // Item is a generic piece of content returned by a Source.
 type Item struct {
 	Title       string

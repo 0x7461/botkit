@@ -1,0 +1,16 @@
+{
+  "github": {
+    "period": "weekly",
+    "summarize": true,
+    "limit": 10
+  },
+  "hn": {
+    "days": 7,
+    "annotate": true,
+    "model": "sonnet",
+    "timeout_seconds": 120
+  },
+  "formatter": {
+    "title": "Scout — Weekly GitHub + HN"
+  }
+}

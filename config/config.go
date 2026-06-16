@@ -28,23 +28,38 @@ type CurateConfig struct {
 	TimeoutSeconds  int    `json:"timeout_seconds"`   // per-backend wall-clock cap
 }
 
-// GhBotConfig holds configuration for the GitHub trending bot.
-type GhBotConfig struct {
-	Source struct {
+// ScoutConfig holds configuration for the combined GitHub + HN scout bot.
+type ScoutConfig struct {
+	GitHub struct {
 		Period    string `json:"period"`
 		Summarize bool   `json:"summarize"`
-	} `json:"source"`
+		Limit     int    `json:"limit"`
+	} `json:"github"`
+	HN struct {
+		Days       int    `json:"days"`
+		Annotate   bool   `json:"annotate"`
+		Model      string `json:"model"`
+		TimeoutSec int    `json:"timeout_seconds"`
+	} `json:"hn"`
 	Formatter struct {
 		Title string `json:"title"`
 	} `json:"formatter"`
 }
 
+// SummarizeConfig controls the per-item one-line summary pass before send.
+type SummarizeConfig struct {
+	Enabled        bool   `json:"enabled"`
+	Model          string `json:"model"`           // backend-specific model id (default sonnet)
+	TimeoutSeconds int    `json:"timeout_seconds"` // wall-clock cap for the batched call
+}
+
 // RssBotConfig holds configuration for the RSS digest bot.
 type RssBotConfig struct {
 	Source struct {
-		MaxDelivery int          `json:"max_delivery"`
-		Feeds       []FeedEntry  `json:"feeds"`
-		Curate      CurateConfig `json:"curate"`
+		MaxDelivery int             `json:"max_delivery"`
+		Feeds       []FeedEntry     `json:"feeds"`
+		Curate      CurateConfig    `json:"curate"`
+		Summarize   SummarizeConfig `json:"summarize"`
 	} `json:"source"`
 }
 

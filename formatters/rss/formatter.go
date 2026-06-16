@@ -84,6 +84,9 @@ func renderLines(items []bot.Item) []string {
 			}
 			line += fmt.Sprintf(" · <a href=\"%s\">%s</a>", disc, escapeHTML(label))
 		}
+		if summary := it.Meta["summary"]; summary != "" {
+			line += fmt.Sprintf("\n  <i>%s</i>", escapeHTML(summary))
+		}
 		lines = append(lines, line)
 	}
 	return lines
