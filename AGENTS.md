@@ -1,6 +1,6 @@
 # AGENTS.md — botkit
 
-Updated: 2026-06-17
+Updated: 2026-07-26
 
 Lightweight Go framework for scheduled Telegram bots. Three interfaces (Source / Formatter / Sender) wired into one runner; each bot is its own binary on a runit + snooze schedule. Binaries: rss-bot (RSS digest), scout (combined GitHub trending + HN Ask/Show/Tell — `bot.MultiSource`), and nagger (daily Claude-quota pace nudge + recurring manual-task reminders — uses `senders/telegram` directly rather than the Source/Formatter runner).
 
