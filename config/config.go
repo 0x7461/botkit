@@ -20,12 +20,12 @@ type FeedEntry struct {
 // CurateConfig controls the LLM ranking pass between dedup and send.
 type CurateConfig struct {
 	Enabled         bool   `json:"enabled"`
-	Target          int    `json:"target"`            // how many items to keep after ranking
-	Backend         string `json:"backend"`           // "claude-code" or "ollama"
-	Model           string `json:"model"`             // backend-specific model id
-	FallbackBackend string `json:"fallback_backend"`  // optional second backend
+	Target          int    `json:"target"`           // how many items to keep after ranking
+	Backend         string `json:"backend"`          // "claude-code" or "ollama"
+	Model           string `json:"model"`            // backend-specific model id
+	FallbackBackend string `json:"fallback_backend"` // optional second backend
 	FallbackModel   string `json:"fallback_model"`
-	TimeoutSeconds  int    `json:"timeout_seconds"`   // per-backend wall-clock cap
+	TimeoutSeconds  int    `json:"timeout_seconds"` // per-backend wall-clock cap
 }
 
 // ScoutConfig holds configuration for the combined GitHub + HN scout bot.
@@ -67,9 +67,23 @@ type RssBotConfig struct {
 // Used only by the fallback cycle-day calc; the live path prefers the API's
 // resets_at from ~/.local/share/nagger/rate-limits.json.
 type NaggerConfig struct {
-	ResetWeekday  int `json:"reset_weekday"`  // Monday=0
-	ResetHour     int `json:"reset_hour"`     // 0-23
+	ResetWeekday  int `json:"reset_weekday"`   // Monday=0
+	ResetHour     int `json:"reset_hour"`      // 0-23
 	ResetTZOffset int `json:"reset_tz_offset"` // hours from UTC
+
+	Reminders []Reminder `json:"reminders"` // recurring manual-task nudges (quarterly archive chores, etc.)
+}
+
+// Reminder is a recurring manual-task nudge fired by nagger on a fixed-day
+// cadence. Fires when today >= (last-fired + EveryDays), or >= Anchor when
+// never fired — so a missed run still fires late rather than skipping a cycle.
+// Last-fired state lives in ~/.local/share/nagger/reminders-state.json, keyed
+// by ID; the config here is immutable and hand-editable.
+type Reminder struct {
+	ID        string `json:"id"`
+	Message   string `json:"message"`
+	EveryDays int    `json:"every_days"`
+	Anchor    string `json:"anchor"` // ISO date (YYYY-MM-DD); first due date when no prior fire recorded
 }
 
 // Load reads ~/.config/botkit/<name>.json into v.

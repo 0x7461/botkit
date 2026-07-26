@@ -110,6 +110,116 @@ func todayInTZ(tzOffset int) string {
 	return time.Now().In(time.FixedZone("local", tzOffset*3600)).Format("2006-01-02")
 }
 
+// --- Reminders: recurring manual-task nudges, independent of the quota dedup ---
+
+func reminderStatePath() string {
+	return filepath.Join(stateDir(), "reminders-state.json")
+}
+
+// readReminderState returns the id→last-fired-date (YYYY-MM-DD) map; empty on any error.
+func readReminderState() map[string]string {
+	m := map[string]string{}
+	data, err := os.ReadFile(reminderStatePath())
+	if err != nil {
+		return m
+	}
+	_ = json.Unmarshal(data, &m)
+	return m
+}
+
+func writeReminderState(m map[string]string) {
+	if err := os.MkdirAll(stateDir(), 0o755); err != nil {
+		log.Printf("warning: mkdir state dir: %v", err)
+		return
+	}
+	data, err := json.MarshalIndent(m, "", "  ")
+	if err != nil {
+		log.Printf("warning: marshal reminder state: %v", err)
+		return
+	}
+	if err := os.WriteFile(reminderStatePath(), append(data, '\n'), 0o644); err != nil {
+		log.Printf("warning: write reminder state: %v", err)
+	}
+}
+
+// remindersDue returns the reminders whose next-due date has arrived, using the
+// last-fired state (falling back to Anchor when a reminder has never fired).
+func remindersDue(cfg config.NaggerConfig, state map[string]string, now time.Time) []config.Reminder {
+	parseDay := func(s string) (time.Time, bool) {
+		t, err := time.Parse("2006-01-02", s)
+		return t, err == nil
+	}
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+	var due []config.Reminder
+	for _, r := range cfg.Reminders {
+		if r.ID == "" || r.EveryDays <= 0 {
+			continue
+		}
+		var next time.Time
+		if lf, ok := state[r.ID]; ok {
+			if t, ok2 := parseDay(lf); ok2 {
+				next = t.AddDate(0, 0, r.EveryDays)
+			}
+		}
+		if next.IsZero() {
+			a, ok := parseDay(r.Anchor)
+			if !ok {
+				continue // no usable anchor and never fired — skip rather than fire blindly
+			}
+			next = a
+		}
+		if !today.Before(next) {
+			due = append(due, r)
+		}
+	}
+	return due
+}
+
+func buildSender() *telegram.Sender {
+	token := bot.FirstNonEmpty(os.Getenv("BOT_NAGGER__TOKEN"), os.Getenv("TELEGRAM_BOT_TOKEN"))
+	var chatID int64
+	chatStr := bot.FirstNonEmpty(os.Getenv("BOT_NAGGER__CHAT"), os.Getenv("TELEGRAM_CHAT_ID"))
+	if chatStr != "" {
+		if _, err := fmt.Sscanf(chatStr, "%d", &chatID); err != nil {
+			log.Fatalf("invalid chat ID %q: %v", chatStr, err)
+		}
+	}
+	if token == "" || chatID == 0 {
+		log.Fatal("ENABLE_TELEGRAM=true but BOT_NAGGER__TOKEN/BOT_NAGGER__CHAT (or TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID) is missing")
+	}
+	return &telegram.Sender{Token: token, ChatID: chatID}
+}
+
+// runReminders fires any due manual-task nudges as a single Telegram message,
+// independent of the quota-nudge daily dedup (each reminder has its own cadence
+// state). No-op when nothing is due. In dry-run it logs and writes no state.
+func runReminders(cfg config.NaggerConfig, enabled bool, today string, now time.Time, sender *telegram.Sender) {
+	state := readReminderState()
+	due := remindersDue(cfg, state, now)
+	if len(due) == 0 {
+		return
+	}
+	lines := []string{"🔔 Quarterly archive reminder — not urgent, do when convenient:"}
+	for _, r := range due {
+		lines = append(lines, "• "+r.Message)
+	}
+	msg := strings.Join(lines, "\n")
+	if !enabled {
+		fmt.Println("[dry-run] would send reminder:")
+		fmt.Println(msg)
+		return
+	}
+	if err := sender.Send(msg); err != nil {
+		log.Printf("warning: reminder send failed: %v", err)
+		return // don't advance state on a failed send — retry next run
+	}
+	for _, r := range due {
+		state[r.ID] = today
+	}
+	writeReminderState(state)
+	fmt.Printf("Sent reminder: %d due\n", len(due))
+}
+
 func main() {
 	bot.LoadEnv("nagger")
 
@@ -120,7 +230,19 @@ func main() {
 
 	enabled := os.Getenv("ENABLE_TELEGRAM") == "true"
 	today := todayInTZ(cfg.ResetTZOffset)
+	nowLocal := time.Now().In(time.FixedZone("local", cfg.ResetTZOffset*3600))
 	lastSentPath := filepath.Join(stateDir(), "last-sent")
+
+	// One sender for both the reminder and quota messages (only needed for real sends).
+	var sender *telegram.Sender
+	if enabled {
+		sender = buildSender()
+	}
+
+	// Reminders run before the quota daily-dedup — they have their own per-item
+	// cadence state, so a due reminder fires regardless of whether today's quota
+	// nudge already went out.
+	runReminders(cfg, enabled, today, nowLocal, sender)
 
 	if enabled {
 		if b, err := os.ReadFile(lastSentPath); err == nil && strings.TrimSpace(string(b)) == today {
@@ -170,19 +292,7 @@ func main() {
 		return
 	}
 
-	token := bot.FirstNonEmpty(os.Getenv("BOT_NAGGER__TOKEN"), os.Getenv("TELEGRAM_BOT_TOKEN"))
-	var chatID int64
-	chatStr := bot.FirstNonEmpty(os.Getenv("BOT_NAGGER__CHAT"), os.Getenv("TELEGRAM_CHAT_ID"))
-	if chatStr != "" {
-		if _, err := fmt.Sscanf(chatStr, "%d", &chatID); err != nil {
-			log.Fatalf("invalid chat ID %q: %v", chatStr, err)
-		}
-	}
-	if token == "" || chatID == 0 {
-		log.Fatal("ENABLE_TELEGRAM=true but BOT_NAGGER__TOKEN/BOT_NAGGER__CHAT (or TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID) is missing")
-	}
-
-	if err := (&telegram.Sender{Token: token, ChatID: chatID}).Send(msg); err != nil {
+	if err := sender.Send(msg); err != nil {
 		log.Fatalf("send failed: %v", err)
 	}
 	if err := os.MkdirAll(stateDir(), 0o755); err != nil {
