@@ -1,12 +1,17 @@
-// nagger — one-shot Telegram nudge to stay on pace with the weekly Claude quota.
-// Ported from the standalone Python project (~/projects/nagger) into botkit.
-// Run hourly 08–22 by runit + snooze; dedup'd to one message per day.
+// nagger — daily Telegram nudges from a unified set of periodic "nags": the
+// Claude weekly-quota pace check plus recurring manual-task reminders. Each nag
+// is a periodic signal (interval + anchor + renderer); one snooze run evaluates
+// them all, fires the due ones as a single combined message (grouped under
+// headers), and dedups per-nag via ~/.local/share/nagger/state.json (id →
+// last-fired date). Run hourly 08–22 by runit + snooze; the per-nag dedup makes
+// re-runs idempotent, so the hourly poll fires each nag at most once per cycle.
 //
 // Inputs:
 //   - ~/.local/share/nagger/rate-limits.json  (written by ~/.claude/statusline.sh
 //     after every CC response — external producer, do not move)
-//   - ~/.config/botkit/nagger.json            (schedule anchor; fallback cycle calc)
-//   - ~/.local/share/nagger/last-sent         (daily dedup state, owned here)
+//   - ~/.config/botkit/nagger.json            (quota reset anchor + reminders)
+//   - ~/.local/share/nagger/state.json        (per-nag last-fired dedup, owned here;
+//     migrated once from the legacy last-sent + reminders-state.json files)
 package main
 
 import (
@@ -106,73 +111,124 @@ func formatReset(ts int64) string {
 	return fmt.Sprintf("resets in %dh %dm", hours, mins)
 }
 
-func todayInTZ(tzOffset int) string {
-	return time.Now().In(time.FixedZone("local", tzOffset*3600)).Format("2006-01-02")
+// --- Unified nag engine ---
+
+// Nag is one periodic signal. It fires when today >= last-fired + IntervalDays;
+// when never fired, it fires at >= Anchor, or immediately when Anchor is empty
+// (the quota case). Nags sharing a Group render under one header in the combined
+// message. Render returns the message block and ok=false to skip firing.
+type Nag struct {
+	ID           string
+	Group        string
+	IntervalDays int
+	Anchor       string
+	Render       func(now time.Time) (string, bool)
 }
 
-// --- Reminders: recurring manual-task nudges, independent of the quota dedup ---
+// groupHeader gives a shared header for nags of a group; groups absent here
+// render their blocks headerless. groupOrder fixes section order in the message.
+var groupHeader = map[string]string{
+	"reminder": "🔔 Quarterly archive reminder — not urgent, do when convenient:",
+}
+var groupOrder = []string{"reminder", "quota"}
 
-func reminderStatePath() string {
-	return filepath.Join(stateDir(), "reminders-state.json")
+func parseDay(s string) (time.Time, bool) {
+	t, err := time.Parse("2006-01-02", s)
+	return t, err == nil
 }
 
-// readReminderState returns the id→last-fired-date (YYYY-MM-DD) map; empty on any error.
-func readReminderState() map[string]string {
+// dueNag reports whether nag n is due as of today (a UTC-midnight date).
+func dueNag(n Nag, state map[string]string, today time.Time) bool {
+	if lf, ok := parseDay(state[n.ID]); ok {
+		return !today.Before(lf.AddDate(0, 0, n.IntervalDays))
+	}
+	if n.Anchor == "" {
+		return true // never fired, no anchor → fire now (quota)
+	}
+	if a, ok := parseDay(n.Anchor); ok {
+		return !today.Before(a)
+	}
+	return false // anchor set but unparseable → don't fire blindly
+}
+
+func statePath() string { return filepath.Join(stateDir(), "state.json") }
+
+// readState loads the unified id→last-fired map. If it doesn't exist yet, it
+// migrates once from the pre-unification files (last-sent → "quota"; the
+// reminders-state.json map merged in).
+func readState() map[string]string {
 	m := map[string]string{}
-	data, err := os.ReadFile(reminderStatePath())
-	if err != nil {
+	if data, err := os.ReadFile(statePath()); err == nil {
+		_ = json.Unmarshal(data, &m)
 		return m
 	}
-	_ = json.Unmarshal(data, &m)
+	if b, err := os.ReadFile(filepath.Join(stateDir(), "last-sent")); err == nil {
+		if d := strings.TrimSpace(string(b)); d != "" {
+			m["quota"] = d
+		}
+	}
+	if b, err := os.ReadFile(filepath.Join(stateDir(), "reminders-state.json")); err == nil {
+		legacy := map[string]string{}
+		if json.Unmarshal(b, &legacy) == nil {
+			for k, v := range legacy {
+				m[k] = v
+			}
+		}
+	}
 	return m
 }
 
-func writeReminderState(m map[string]string) {
+func writeState(m map[string]string) {
 	if err := os.MkdirAll(stateDir(), 0o755); err != nil {
 		log.Printf("warning: mkdir state dir: %v", err)
 		return
 	}
 	data, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
-		log.Printf("warning: marshal reminder state: %v", err)
+		log.Printf("warning: marshal state: %v", err)
 		return
 	}
-	if err := os.WriteFile(reminderStatePath(), append(data, '\n'), 0o644); err != nil {
-		log.Printf("warning: write reminder state: %v", err)
+	if err := os.WriteFile(statePath(), append(data, '\n'), 0o644); err != nil {
+		log.Printf("warning: write state: %v", err)
 	}
 }
 
-// remindersDue returns the reminders whose next-due date has arrived, using the
-// last-fired state (falling back to Anchor when a reminder has never fired).
-func remindersDue(cfg config.NaggerConfig, state map[string]string, now time.Time) []config.Reminder {
-	parseDay := func(s string) (time.Time, bool) {
-		t, err := time.Parse("2006-01-02", s)
-		return t, err == nil
+type firedBlock struct {
+	group string
+	block string
+}
+
+// buildMessage joins due blocks into one message: grouped blocks share a header,
+// sections ordered by groupOrder (then any leftover groups, first-seen order).
+func buildMessage(fired []firedBlock) string {
+	byGroup := map[string][]string{}
+	var seen []string
+	for _, f := range fired {
+		if _, ok := byGroup[f.group]; !ok {
+			seen = append(seen, f.group)
+		}
+		byGroup[f.group] = append(byGroup[f.group], f.block)
 	}
-	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
-	var due []config.Reminder
-	for _, r := range cfg.Reminders {
-		if r.ID == "" || r.EveryDays <= 0 {
-			continue
+	emit := func(g string) string {
+		if h, ok := groupHeader[g]; ok {
+			return h + "\n" + strings.Join(byGroup[g], "\n")
 		}
-		var next time.Time
-		if lf, ok := state[r.ID]; ok {
-			if t, ok2 := parseDay(lf); ok2 {
-				next = t.AddDate(0, 0, r.EveryDays)
-			}
-		}
-		if next.IsZero() {
-			a, ok := parseDay(r.Anchor)
-			if !ok {
-				continue // no usable anchor and never fired — skip rather than fire blindly
-			}
-			next = a
-		}
-		if !today.Before(next) {
-			due = append(due, r)
+		return strings.Join(byGroup[g], "\n")
+	}
+	var sections []string
+	done := map[string]bool{}
+	for _, g := range groupOrder {
+		if len(byGroup[g]) > 0 {
+			sections = append(sections, emit(g))
+			done[g] = true
 		}
 	}
-	return due
+	for _, g := range seen {
+		if !done[g] {
+			sections = append(sections, emit(g))
+		}
+	}
+	return strings.Join(sections, "\n\n")
 }
 
 func buildSender() *telegram.Sender {
@@ -190,34 +246,62 @@ func buildSender() *telegram.Sender {
 	return &telegram.Sender{Token: token, ChatID: chatID}
 }
 
-// runReminders fires any due manual-task nudges as a single Telegram message,
-// independent of the quota-nudge daily dedup (each reminder has its own cadence
-// state). No-op when nothing is due. In dry-run it logs and writes no state.
-func runReminders(cfg config.NaggerConfig, enabled bool, today string, now time.Time, sender *telegram.Sender) {
-	state := readReminderState()
-	due := remindersDue(cfg, state, now)
-	if len(due) == 0 {
-		return
+// quotaNag is the daily Claude-quota pace check — an interval-1 nag with a
+// live-computed message (cycle day, target %, actual usage, reset time).
+func quotaNag(cfg config.NaggerConfig) Nag {
+	return Nag{
+		ID: "quota", Group: "quota", IntervalDays: 1, Anchor: "",
+		Render: func(now time.Time) (string, bool) {
+			var resetsAt int64
+			var actual *int
+			if rl, ok := readRateLimits(); ok {
+				resetsAt = rl.SevenDayResetsAt
+				a := rl.SevenDay
+				actual = &a
+			}
+			day := getCycleDay(resetsAt, cfg)
+			c := cycle[day-1]
+			floor := int(float64(c.Target) * 0.7)
+
+			var paceLine string
+			switch {
+			case actual == nil:
+				paceLine = "Actual: unknown (open CC to refresh)"
+			case *actual < floor:
+				paceLine = fmt.Sprintf("Actual: %d%% — under-using 💸 (target %d%%, floor %d%%)", *actual, c.Target, floor)
+			case *actual <= c.Target:
+				paceLine = fmt.Sprintf("Actual: %d%% — on pace ✓", *actual)
+			default:
+				paceLine = fmt.Sprintf("Actual: %d%% — over pace ⚠️ (target %d%%)", *actual, c.Target)
+			}
+			lines := []string{
+				fmt.Sprintf("📊 Claude quota check — Day %d/7 (%s)", day, c.Label),
+				fmt.Sprintf("Target: ~%d%% weekly usage by end of today.", c.Target),
+				paceLine,
+			}
+			if rs := formatReset(resetsAt); rs != "" {
+				lines = append(lines, strings.ToUpper(rs[:1])+rs[1:]+".")
+			}
+			return strings.Join(lines, "\n"), true
+		},
 	}
-	lines := []string{"🔔 Quarterly archive reminder — not urgent, do when convenient:"}
-	for _, r := range due {
-		lines = append(lines, "• "+r.Message)
+}
+
+// reminderNags expands the config reminders into nags. A reminder needs an
+// explicit anchor (never the fire-now empty-anchor path — that's quota-only).
+func reminderNags(cfg config.NaggerConfig) []Nag {
+	var nags []Nag
+	for _, r := range cfg.Reminders {
+		if r.ID == "" || r.EveryDays <= 0 || r.Anchor == "" {
+			continue
+		}
+		msg := "• " + r.Message
+		nags = append(nags, Nag{
+			ID: r.ID, Group: "reminder", IntervalDays: r.EveryDays, Anchor: r.Anchor,
+			Render: func(now time.Time) (string, bool) { return msg, true },
+		})
 	}
-	msg := strings.Join(lines, "\n")
-	if !enabled {
-		fmt.Println("[dry-run] would send reminder:")
-		fmt.Println(msg)
-		return
-	}
-	if err := sender.Send(msg); err != nil {
-		log.Printf("warning: reminder send failed: %v", err)
-		return // don't advance state on a failed send — retry next run
-	}
-	for _, r := range due {
-		state[r.ID] = today
-	}
-	writeReminderState(state)
-	fmt.Printf("Sent reminder: %d due\n", len(due))
+	return nags
 }
 
 func main() {
@@ -229,62 +313,32 @@ func main() {
 	}
 
 	enabled := os.Getenv("ENABLE_TELEGRAM") == "true"
-	today := todayInTZ(cfg.ResetTZOffset)
-	nowLocal := time.Now().In(time.FixedZone("local", cfg.ResetTZOffset*3600))
-	lastSentPath := filepath.Join(stateDir(), "last-sent")
+	loc := time.FixedZone("local", cfg.ResetTZOffset*3600)
+	now := time.Now().In(loc)
+	today := now.Format("2006-01-02")
+	todayDate := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
 
-	// One sender for both the reminder and quota messages (only needed for real sends).
-	var sender *telegram.Sender
-	if enabled {
-		sender = buildSender()
-	}
+	nags := append([]Nag{quotaNag(cfg)}, reminderNags(cfg)...)
+	state := readState()
 
-	// Reminders run before the quota daily-dedup — they have their own per-item
-	// cadence state, so a due reminder fires regardless of whether today's quota
-	// nudge already went out.
-	runReminders(cfg, enabled, today, nowLocal, sender)
-
-	if enabled {
-		if b, err := os.ReadFile(lastSentPath); err == nil && strings.TrimSpace(string(b)) == today {
-			fmt.Println("Already sent today — skipping.")
-			return
+	var fired []firedBlock
+	var firedIDs []string
+	for _, n := range nags {
+		if !dueNag(n, state, todayDate) {
+			continue
+		}
+		if block, ok := n.Render(now); ok {
+			fired = append(fired, firedBlock{group: n.Group, block: block})
+			firedIDs = append(firedIDs, n.ID)
 		}
 	}
 
-	rl, haveRL := readRateLimits()
-	var resetsAt int64
-	var actual *int
-	if haveRL {
-		resetsAt = rl.SevenDayResetsAt
-		a := rl.SevenDay
-		actual = &a
+	if len(fired) == 0 {
+		fmt.Println("Nothing due — skipping.")
+		return
 	}
 
-	day := getCycleDay(resetsAt, cfg)
-	c := cycle[day-1]
-	floor := int(float64(c.Target) * 0.7)
-
-	var paceLine string
-	switch {
-	case actual == nil:
-		paceLine = "Actual: unknown (open CC to refresh)"
-	case *actual < floor:
-		paceLine = fmt.Sprintf("Actual: %d%% — under-using 💸 (target %d%%, floor %d%%)", *actual, c.Target, floor)
-	case *actual <= c.Target:
-		paceLine = fmt.Sprintf("Actual: %d%% — on pace ✓", *actual)
-	default:
-		paceLine = fmt.Sprintf("Actual: %d%% — over pace ⚠️ (target %d%%)", *actual, c.Target)
-	}
-
-	lines := []string{
-		fmt.Sprintf("📊 Claude quota check — Day %d/7 (%s)", day, c.Label),
-		fmt.Sprintf("Target: ~%d%% weekly usage by end of today.", c.Target),
-		paceLine,
-	}
-	if rs := formatReset(resetsAt); rs != "" {
-		lines = append(lines, strings.ToUpper(rs[:1])+rs[1:]+".")
-	}
-	msg := strings.Join(lines, "\n")
+	msg := buildMessage(fired)
 
 	if !enabled {
 		fmt.Println("[dry-run] ENABLE_TELEGRAM != true — would send:")
@@ -292,14 +346,12 @@ func main() {
 		return
 	}
 
-	if err := sender.Send(msg); err != nil {
+	if err := buildSender().Send(msg); err != nil {
 		log.Fatalf("send failed: %v", err)
 	}
-	if err := os.MkdirAll(stateDir(), 0o755); err != nil {
-		log.Printf("warning: mkdir state dir: %v", err)
+	for _, id := range firedIDs {
+		state[id] = today
 	}
-	if err := os.WriteFile(lastSentPath, []byte(today), 0o644); err != nil {
-		log.Printf("warning: write last-sent: %v", err)
-	}
-	fmt.Printf("Sent: Day %d/7 — %s — target %d%%\n", day, c.Label, c.Target)
+	writeState(state)
+	fmt.Printf("Sent: %d nag(s) — %s\n", len(firedIDs), strings.Join(firedIDs, ", "))
 }

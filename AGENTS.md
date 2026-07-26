@@ -25,7 +25,7 @@ Declared runtime state — reconciled against `sv status` + `down` sentinels by 
 
 - `scout`: persistent — weekly Sat 09:00 GitHub trending + HN digest (`snooze -w6 -H9`). Credentials in `.env.scout` (`BOT_SCOUT__TOKEN`/`BOT_SCOUT__CHAT`). Replaced `github-trending`/gh-bot (retired 2026-06-17).
 - `rss-bot`: persistent — daily 12:00 RSS digest (`snooze -H12`)
-- `nagger`: persistent — hourly 08–22 (`snooze -H8-22 ./bin/nagger`). Two jobs per run: (1) Claude-quota pace nudge, dedup'd to one msg/day via `last-sent`; (2) recurring manual-task **reminders** (fixed-day cadence, e.g. quarterly archive chores), fired before the quota dedup with their own per-item state in `~/.local/share/nagger/reminders-state.json`. Reminders configured under `reminders` in `nagger.json`.
+- `nagger`: persistent — hourly 08–22 (`snooze -H8-22 ./bin/nagger`). Runs a unified set of periodic **nags** (`cmd/nagger`: `Nag` = id + interval + anchor + renderer): the daily Claude-quota pace check (interval 1, live-computed message) and recurring manual-task **reminders** (fixed-day cadence, e.g. quarterly archive chores; configured under `reminders` in `nagger.json`). One run evaluates all nags, fires the due ones as **one combined message** (grouped under headers), and dedups per-nag via `state.json`. Per-nag dedup makes the hourly poll idempotent (each nag fires once per cycle).
 
 ## Commands
 
@@ -64,7 +64,7 @@ External integration points:
 - `~/.local/share/botkit/rss-seen.db` — RSS dedup SQLite.
 - `~/.config/botkit/<bot>.json` — per-bot config overrides (scout: period/summarize/limit + hn block; rss-bot: feed list, max_delivery, `curate` block, `summarize` block — per-item one-line summaries, sonnet, off unless `enabled`). **`rss-bot.json` is chezmoi-managed** — `chezmoi re-add ~/.config/botkit/rss-bot.json` after editing it live, or the source drifts (scout/nagger json are not tracked).
 - `~/.config/botkit/nagger.json` — nagger schedule config + `reminders` array, read by `cmd/nagger`. Hand-edited (was written by ai-agent's `/nagger` before that bot's retirement). Each reminder: `{id, message, every_days, anchor}` (anchor = first due date when never fired).
-- `~/.local/share/nagger/{rate-limits.json,last-sent,reminders-state.json}` — nagger pace cache (`rate-limits.json` written by `~/.claude/statusline.sh` every CC response — external, don't move) + daily quota dedup state (`last-sent`) + per-reminder last-fired dates (`reminders-state.json`, id→YYYY-MM-DD; config is immutable, state is separate).
+- `~/.local/share/nagger/{rate-limits.json,state.json}` — `rate-limits.json` is the pace cache (written by `~/.claude/statusline.sh` every CC response — external, don't move). `state.json` is the unified per-nag last-fired map (id→YYYY-MM-DD, incl. `quota`; config is immutable, state is separate). Replaced the split `last-sent` + `reminders-state.json` (2026-07-26; `readState` migrates them once if `state.json` is absent).
 
 ## Boundaries & gotchas
 
