@@ -12,6 +12,9 @@ Higher priority:
   - interesting gadgets and consumer tech — new cameras, lenses, phones,
     watches, smart glasses, laptops, headphones, e-readers, and similar —
     especially notable releases, reviews, or shifts in the category
+  - items marked ★ come from feeds the reader subscribes to deliberately.
+    Give them a slight edge over a comparable unmarked item — a tiebreaker,
+    not a free pass. Drop a ★ item that is genuinely dull or off-topic.
 
 Lower priority (but don't exclude if genuinely novel or surprising):
   - business news: IPOs, M&A, revenue, leadership changes, market cap

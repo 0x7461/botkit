@@ -7,15 +7,15 @@ import (
 	"github.com/0x7461/botkit/bot"
 )
 
-// Formatter renders RSS items as Telegram HTML, split into two category
-// messages: hand-picked blogs (items with meta["skip_curate"]=="true") and
-// today's curated picks (everything else). Long categories are split into
-// numbered messages so each stays under the Telegram 4096-char per-message cap.
+// Formatter renders RSS items as Telegram HTML under a single "Today's picks"
+// heading — every item has been through the ranker, so there is no longer a
+// bypassed-blogs category to separate out. Items are clustered by feed, and
+// long runs are split into numbered messages so each stays under the Telegram
+// 4096-char per-message cap.
 type Formatter struct{}
 
 const (
 	maxMessageChars = 4000
-	blogsHeader     = "📰 <b>Hand-picked blogs</b>"
 	picksHeader     = "🔥 <b>Today's picks</b>"
 )
 
@@ -30,23 +30,7 @@ func (f *Formatter) FormatAll(items []bot.Item) []string {
 		return nil
 	}
 
-	var blogs, picks []bot.Item
-	for _, it := range items {
-		if it.Meta["skip_curate"] == "true" {
-			blogs = append(blogs, it)
-		} else {
-			picks = append(picks, it)
-		}
-	}
-
-	var out []string
-	if len(blogs) > 0 {
-		out = append(out, splitMessage(blogsHeader, renderLines(clusterByFeed(blogs)))...)
-	}
-	if len(picks) > 0 {
-		out = append(out, splitMessage(picksHeader, renderLines(clusterByFeed(picks)))...)
-	}
-	return out
+	return splitMessage(picksHeader, renderLines(clusterByFeed(items)))
 }
 
 // clusterByFeed groups items from the same feed together while preserving

@@ -41,7 +41,7 @@ func main() {
 				URL:             f.URL,
 				MaxItems:        f.MaxItems,
 				DiscussionLabel: f.DiscussionLabel,
-				SkipCurate:      f.SkipCurate,
+				Favored:         f.Favored,
 			}
 		}
 	}
@@ -74,31 +74,20 @@ func main() {
 	}
 	fmt.Printf("fetched %d, deduped to %d\n", fetched, len(unseen))
 
-	// Split: skip_curate feeds always shipped; rest go through the LLM ranker.
-	var blogs, curatable []bot.Item
-	for _, it := range unseen {
-		if it.Meta["skip_curate"] == "true" {
-			blogs = append(blogs, it)
-		} else {
-			curatable = append(curatable, it)
-		}
-	}
-
-	// Curate (or pass-through on failure)
-	picks := curatable
-	if cfg.Source.Curate.Enabled && len(curatable) > 0 {
+	// Every feed goes through the LLM ranker; favored feeds only get a small
+	// edge inside it (★ in the prompt), never a bypass.
+	final := unseen
+	if cfg.Source.Curate.Enabled && len(unseen) > 0 {
 		curator := buildCurator(cfg.Source.Curate)
 		if curator != nil {
-			ranked, err := curator.Curate(curatable, cfg.Source.Curate.Target)
+			ranked, err := curator.Curate(unseen, cfg.Source.Curate.Target)
 			if err != nil {
-				fmt.Printf("curate: all backends failed, passing through %d items: %v\n", len(curatable), err)
+				fmt.Printf("curate: all backends failed, passing through %d items: %v\n", len(unseen), err)
 			} else {
-				picks = ranked
+				final = ranked
 			}
 		}
 	}
-
-	final := append(blogs, picks...)
 
 	// Cap to avoid flooding after outage / first run / curation pass-through
 	if len(final) > maxDelivery {
@@ -123,7 +112,7 @@ func main() {
 		curate.Summarize(final, model, timeout)
 	}
 
-	fmt.Printf("delivering: %d blogs + %d picks = %d items\n", len(blogs), len(picks), len(final))
+	fmt.Printf("delivering: %d items\n", len(final))
 
 	if os.Getenv("ENABLE_TELEGRAM") != "true" {
 		formatter := &rssformatter.Formatter{}

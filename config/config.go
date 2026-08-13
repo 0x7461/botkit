@@ -14,7 +14,7 @@ type FeedEntry struct {
 	URL             string `json:"url"`
 	MaxItems        int    `json:"max_items"`
 	DiscussionLabel string `json:"discussion_label,omitempty"`
-	SkipCurate      bool   `json:"skip_curate,omitempty"`
+	Favored         bool   `json:"favored,omitempty"`
 }
 
 // CurateConfig controls the LLM ranking pass between dedup and send.

@@ -167,7 +167,11 @@ func buildPrompt(items []bot.Item, target int) string {
 		if len(desc) > 200 {
 			desc = strings.TrimSpace(desc[:200]) + "…"
 		}
-		sb.WriteString(fmt.Sprintf("  [%d] (%s) %s — %s\n", i, it.Meta["feed"], it.Title, desc))
+		mark := ""
+		if it.Meta["favored"] == "true" {
+			mark = "★ "
+		}
+		sb.WriteString(fmt.Sprintf("  [%d] %s(%s) %s — %s\n", i, mark, it.Meta["feed"], it.Title, desc))
 	}
 	return fmt.Sprintf(SystemPrompt, target, sb.String())
 }
