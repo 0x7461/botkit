@@ -4,7 +4,7 @@ Updated: 2026-08-02
 
 Lightweight Go framework for scheduled Telegram bots. Three interfaces (Source / Formatter / Sender) wired into one runner; each bot is its own binary on a runit + snooze schedule. Binaries: rss-bot (RSS digest), scout (combined GitHub trending + HN Ask/Show/Tell — `bot.MultiSource`), and nagger (daily Claude-quota pace nudge + recurring manual-task reminders — uses `senders/telegram` directly rather than the Source/Formatter runner).
 
-> The `ai-agent` bot ("The Smartass" — interactive multi-backend Telegram chat) was **retired 2026-06-14** (superseded by Claude's remote-control; barely used). See `PLAN.md ## History`.
+> The `ai-agent` bot ("The Smartass" — interactive multi-backend Telegram chat) was **retired 2026-06-14** (superseded by Claude's remote-control; barely used). See `HISTORY.md`.
 
 Audience: agents editing this repo. Framework overview + bot list in `README.md`. Decisions, internals, history in `PLAN.md` (local-only — gitignored).
 
@@ -92,5 +92,5 @@ External integration points:
 - **`README.md`** — framework overview, bot list, interface signatures, dependencies.
 - **`PLAN.md ## Decisions`** (local-only) — architectural choices: separate binaries, snooze+runit scheduling, three-interface split.
 - **`PLAN.md ## Internals`** — recap integration, dotenv/runit interaction details.
-- **`PLAN.md ## History`** — what shipped when, including the 2026-06-14 ai-agent retirement and the 2026-03-13 Opus code-review hardening (20 issues fixed in one commit, `b10018a`).
+- **`HISTORY.md`** — what shipped when, including the 2026-06-14 ai-agent retirement and the 2026-03-13 Opus code-review hardening (20 issues fixed in one commit, `b10018a`).
 - **`cmd/nagger/`** — quota-pace nudge, folded in 2026-06-05 (was the standalone `~/projects/nagger` Python project). Reads `~/.config/botkit/nagger.json`.
