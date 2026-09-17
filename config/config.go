@@ -71,6 +71,12 @@ type NaggerConfig struct {
 	ResetHour     int `json:"reset_hour"`      // 0-23
 	ResetTZOffset int `json:"reset_tz_offset"` // hours from UTC
 
+	// QuotaEnabled gates the daily Claude-quota pace nag. Defaults to true (set
+	// in cmd/nagger's config literal, which Load unmarshals over) — set
+	// "quota_enabled": false to silence it while there is no subscription to
+	// pace. Reminders keep firing either way.
+	QuotaEnabled bool `json:"quota_enabled"`
+
 	Reminders []Reminder `json:"reminders"` // recurring manual-task nudges (quarterly archive chores, etc.)
 }
 
