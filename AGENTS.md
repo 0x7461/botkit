@@ -1,6 +1,6 @@
 # AGENTS.md — botkit
 
-Updated: 2026-08-02
+Updated: 2026-09-18
 
 Lightweight Go framework for scheduled Telegram bots. Three interfaces (Source / Formatter / Sender) wired into one runner; each bot is its own binary on a runit + snooze schedule. Binaries: rss-bot (RSS digest), scout (combined GitHub trending + HN Ask/Show/Tell — `bot.MultiSource`), and nagger (daily Claude-quota pace nudge + recurring manual-task reminders — uses `senders/telegram` directly rather than the Source/Formatter runner).
 
@@ -63,8 +63,8 @@ External integration points:
 - `~/service/{scout,rss-bot,nagger}/` — runit user services.
 - `~/.local/share/botkit/rss-seen.db` — RSS dedup SQLite.
 - `~/.config/botkit/<bot>.json` — per-bot config overrides (scout: period/summarize/limit + hn block; rss-bot: feed list, max_delivery, `curate` block, `summarize` block — per-item one-line summaries, sonnet, off unless `enabled`). **`rss-bot.json` is chezmoi-managed** — `chezmoi re-add ~/.config/botkit/rss-bot.json` after editing it live, or the source drifts (scout/nagger json are not tracked).
-- `~/.config/botkit/nagger.json` — nagger schedule config + `reminders` array, read by `cmd/nagger`. Hand-edited (was written by ai-agent's `/nagger` before that bot's retirement). Each reminder: `{id, message, every_days, anchor}` (anchor = first due date when never fired).
-- `~/.local/share/nagger/{rate-limits.json,state.json}` — `rate-limits.json` is the pace cache (written by `~/.claude/statusline.sh` every CC response — external, don't move). `state.json` is the unified per-nag last-fired map (id→YYYY-MM-DD, incl. `quota`; config is immutable, state is separate). Replaced the split `last-sent` + `reminders-state.json` (2026-07-26; `readState` migrates them once if `state.json` is absent).
+- `~/.config/botkit/nagger.json` — nagger schedule config + `reminders` array, read by `cmd/nagger`. Hand-edited (was written by ai-agent's `/nagger` before that bot's retirement). Each reminder: `{id, message, every_days, anchor}` (anchor = first due date when never fired). **`quota_enabled`** gates the daily Claude-quota nag; it defaults to `true` via `cmd/nagger`'s config literal, so an absent key keeps the nag. Set to `false` 2026-09-17 — Claude Pro is cancelled, paid through 2026-10-10, so there is no quota to pace.
+- `~/.local/share/nagger/{rate-limits.json,state.json}` — `rate-limits.json` is the pace cache (written by `~/.claude/statusline.py` every CC response — external, don't move; `statusline.sh` became a thin per-OS runner 2026-09-18 and no longer writes it). The writer skips the write where `~/.local/share` is absent, and skips it when no `rate_limits` field is present, so the last good reading survives a payload without limits. `state.json` is the unified per-nag last-fired map (id→YYYY-MM-DD, incl. `quota`; config is immutable, state is separate). Replaced the split `last-sent` + `reminders-state.json` (2026-07-26; `readState` migrates them once if `state.json` is absent).
 
 ## Boundaries & gotchas
 
