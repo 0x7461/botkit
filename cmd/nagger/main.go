@@ -307,7 +307,7 @@ func reminderNags(cfg config.NaggerConfig) []Nag {
 func main() {
 	bot.LoadEnv("nagger")
 
-	cfg := config.NaggerConfig{ResetWeekday: 0, ResetHour: 11, ResetTZOffset: 7} // migrated defaults
+	cfg := config.NaggerConfig{ResetWeekday: 0, ResetHour: 11, ResetTZOffset: 7, QuotaEnabled: true} // migrated defaults
 	if err := config.Load("nagger", &cfg); err != nil {
 		log.Printf("warning: could not load nagger config: %v", err)
 	}
@@ -318,7 +318,10 @@ func main() {
 	today := now.Format("2006-01-02")
 	todayDate := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
 
-	nags := append([]Nag{quotaNag(cfg)}, reminderNags(cfg)...)
+	nags := reminderNags(cfg)
+	if cfg.QuotaEnabled {
+		nags = append([]Nag{quotaNag(cfg)}, nags...)
+	}
 	state := readState()
 
 	var fired []firedBlock
