@@ -99,6 +99,18 @@ func (c *ClaudeCodeCurator) Curate(items []bot.Item, target int) ([]bot.Item, er
 	return applyRanking(items, target, string(output))
 }
 
+// Shared Ollama tuning. Both defaults are traps rather than merely small:
+// Ollama silently TRUNCATES a prompt longer than num_ctx (default 8192, or 4096
+// on /v1), and returns an EMPTY response with done_reason "length" when
+// num_predict is reached. Neither surfaces as an error, so both read downstream
+// as "the model gave us nothing useful". Measured 2026-09-24 on gemma4:e4b: a
+// 120-item curate prompt is ~9.7k tokens and needs well over 300 output tokens.
+const (
+	ollamaBaseURL    = "http://localhost:11434"
+	ollamaNumCtx     = 32768
+	ollamaNumPredict = 2000
+)
+
 // OllamaCurator hits a local Ollama server via /api/generate.
 type OllamaCurator struct {
 	Model   string        // e.g. "gemma4:e4b"
@@ -114,7 +126,7 @@ func (o *OllamaCurator) Curate(items []bot.Item, target int) ([]bot.Item, error)
 	}
 	baseURL := o.BaseURL
 	if baseURL == "" {
-		baseURL = "http://localhost:11434"
+		baseURL = ollamaBaseURL
 	}
 
 	prompt := buildPrompt(items, target)
@@ -127,7 +139,8 @@ func (o *OllamaCurator) Curate(items []bot.Item, target int) ([]bot.Item, error)
 		"format": "json",
 		"options": map[string]any{
 			"temperature": 0.2,
-			"num_ctx":     16384, // bump above the 8K default to fit large batches
+			"num_ctx":     ollamaNumCtx,
+			"num_predict": ollamaNumPredict,
 		},
 	})
 

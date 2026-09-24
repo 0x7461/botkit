@@ -1,6 +1,6 @@
 # AGENTS.md — botkit
 
-Updated: 2026-09-18
+Updated: 2026-09-24
 
 Lightweight Go framework for scheduled Telegram bots. Three interfaces (Source / Formatter / Sender) wired into one runner; each bot is its own binary on a runit + snooze schedule. Binaries: rss-bot (RSS digest), scout (combined GitHub trending + HN Ask/Show/Tell — `bot.MultiSource`), and nagger (daily Claude-quota pace nudge + recurring manual-task reminders — uses `senders/telegram` directly rather than the Source/Formatter runner).
 
@@ -49,7 +49,9 @@ go run ./cmd/rss-bot/
 
 ```
 bot/                              framework: Item, Source/Formatter/Sender, Bot runner, MultiSource
-bot/curate/                       LLM passes: ranking (ChainCurator, rss-bot) + Annotate (summary+sentiment, scout), claude -p + Ollama
+bot/curate/                       LLM passes: ranking (ChainCurator, rss-bot), Summarize (rss-bot) +
+                                  Annotate (scout). Backends: Ollama (default) or claude -p, routed
+                                  explicitly per pass via runText/backendFor.
 cmd/{rss-bot,scout,nagger}/       bot entry points — one binary each
 sources/{rss,github,hackernews}/  Source implementations (gofeed, goquery, Algolia HN API)
 formatters/{rss,scout}/           Formatter implementations
@@ -80,6 +82,7 @@ External integration points:
 - **Don't use `cmd.Output()` for `claude -p` invocations.** When CC quota expires, `claude -p` writes the error to **stdout, not stderr**. `cmd.Output()` discards stdout on error → empty error message. Use an explicit `bytes.Buffer` for stderr and fall back to stdout content if stderr is empty. Applies to any `claude -p` shell-out (e.g. `bot/curate/`).
 - **Keep GitHub trending (scout's `sources/github`) and RSS (rss-bot) as separate sources on separate bots.** Don't fold RSS feeds into scout or GitHub trending into rss-bot — different schedules, formatters, and lifecycles.
 - **Don't pass `--bare` to `claude -p`** in `bot/curate/`. `--bare` skips not just CLAUDE.md/settings but also auth discovery → "Not logged in" failure. Caught 2026-05-25 when first wiring rss-bot curation.
+- **Don't lower `ollamaNumCtx` / `ollamaNumPredict` (`bot/curate/curate.go`) without re-measuring.** Both Ollama defaults fail *silently*, which is why they are pinned rather than left alone: a prompt longer than `num_ctx` (default 8192, 4096 on `/v1`) is **truncated with no error**, and hitting `num_predict` returns an **empty** `response` with `done_reason: "length"` — which reaches the caller as "no JSON array found", indistinguishable from a bad answer. `runOllamaText` turns the empty case into an explicit error naming `num_predict`; keep that. Measured 2026-09-24 on `gemma4:e4b`, CPU-only (no GPU offload — 9.6GB model against 4GB VRAM): 28s model load, 57 tok/s prefill, 8.5 tok/s generation. A 120-item curate prompt is ~9.7k tokens, so a cold run costs ~4.5 minutes — hence the 600s timeouts. The old 60s curate / 120s summarize caps would fail every cold run.
 
 **Ask first:**
 - Adding a new bot binary. Comes with runit service setup, BotFather token, schedule decision — discuss in PLAN.md `## Decisions` first.

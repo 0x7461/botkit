@@ -20,12 +20,14 @@ Articles:
 // Summarize best-effort fills Meta["summary"] for each item from its Title and
 // Description in a single batched model call. On any failure it logs and leaves
 // items unchanged, so callers can always ship the digest (mirrors Annotate).
-func Summarize(items []bot.Item, model string, timeout time.Duration) {
+func Summarize(items []bot.Item, backend, model string, timeout time.Duration) {
 	if len(items) == 0 {
 		return
 	}
-	if full, ok := claudeModelMap[model]; ok {
-		model = full
+	if backend == "claude-code" {
+		if full, ok := claudeModelMap[model]; ok {
+			model = full
+		}
 	}
 
 	var sb strings.Builder
@@ -38,7 +40,7 @@ func Summarize(items []bot.Item, model string, timeout time.Duration) {
 	}
 	prompt := fmt.Sprintf(summarizePrompt, sb.String())
 
-	out, err := runClaudeText(model, timeout, prompt)
+	out, err := runText(backend, model, timeout, prompt)
 	if err != nil {
 		fmt.Printf("summarize: %v\n", err)
 		return

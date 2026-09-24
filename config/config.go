@@ -38,6 +38,7 @@ type ScoutConfig struct {
 	HN struct {
 		Days       int    `json:"days"`
 		Annotate   bool   `json:"annotate"`
+		Backend    string `json:"backend"` // "ollama" or "claude-code"
 		Model      string `json:"model"`
 		TimeoutSec int    `json:"timeout_seconds"`
 	} `json:"hn"`
@@ -49,7 +50,8 @@ type ScoutConfig struct {
 // SummarizeConfig controls the per-item one-line summary pass before send.
 type SummarizeConfig struct {
 	Enabled        bool   `json:"enabled"`
-	Model          string `json:"model"`           // backend-specific model id (default sonnet)
+	Backend        string `json:"backend"`         // "ollama" or "claude-code"
+	Model          string `json:"model"`           // backend-specific model id
 	TimeoutSeconds int    `json:"timeout_seconds"` // wall-clock cap for the batched call
 }
 

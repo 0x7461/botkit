@@ -101,15 +101,11 @@ func main() {
 
 	// Per-item one-line summaries (best-effort; digest ships unchanged on failure).
 	if cfg.Source.Summarize.Enabled {
-		model := cfg.Source.Summarize.Model
-		if model == "" {
-			model = "sonnet"
-		}
 		timeout := time.Duration(cfg.Source.Summarize.TimeoutSeconds) * time.Second
 		if timeout <= 0 {
-			timeout = 120 * time.Second
+			timeout = 300 * time.Second
 		}
-		curate.Summarize(final, model, timeout)
+		curate.Summarize(final, cfg.Source.Summarize.Backend, cfg.Source.Summarize.Model, timeout)
 	}
 
 	fmt.Printf("delivering: %d items\n", len(final))
