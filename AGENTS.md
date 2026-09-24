@@ -24,7 +24,7 @@ Each bot loads `.env.<name>` then the umbrella `.env` via `bot.LoadEnv(name)` (f
 Declared runtime state — reconciled against `sv status` + `down` sentinels by `maint-watch doctor` and the weekly maint-watch scan (`service.claim_*` findings). `persistent` = must be up and survive reboot.
 
 - `scout`: persistent, every 7d — weekly Sat 09:00 GitHub trending + HN digest (`snooze -w6 -H9`). Credentials in `.env.scout` (`BOT_SCOUT__TOKEN`/`BOT_SCOUT__CHAT`). Replaced `github-trending`/gh-bot (retired 2026-06-17).
-- `rss-bot`: persistent, every 1d — daily 12:00 RSS digest (`snooze -H12`)
+- `rss-bot`: persistent, every 1d — fires daily 18:00, **delivers Mon + Fri only** (`snooze -H18` → `-mode=deliver` on `date +%u` 1|5, else `-mode=curate`). The split is deliberate: a feed only exposes its newest `max_items`, so a twice-weekly *fetch* loses whatever the busy feeds published in between. Curating daily and queueing the winners (`pending` table in `rss-seen.db`) keeps every day's items and holds each curate prompt to ~50 items — the size gemma4 handles well — instead of one 3× longer on delivery day.
 - `nagger`: persistent, every 12h — hourly 08–22 (`snooze -H8-22 ./bin/nagger`). Runs a unified set of periodic **nags** (`cmd/nagger`: `Nag` = id + interval + anchor + renderer): the daily Claude-quota pace check (interval 1, live-computed message) and recurring manual-task **reminders** (fixed-day cadence, e.g. quarterly archive chores; configured under `reminders` in `nagger.json`). One run evaluates all nags, fires the due ones as **one combined message** (grouped under headers), and dedups per-nag via `state.json`. Per-nag dedup makes the hourly poll idempotent (each nag fires once per cycle).
 
 ## Commands
@@ -63,7 +63,7 @@ bin/                              built binaries (gitignored)
 
 External integration points:
 - `~/service/{scout,rss-bot,nagger}/` — runit user services.
-- `~/.local/share/botkit/rss-seen.db` — RSS dedup SQLite.
+- `~/.local/share/botkit/rss-seen.db` — RSS SQLite: `seen` (judged guids, 90d retention) + `pending` (curated-but-undelivered items, **stored whole** — a guid is useless later because the feed window has moved on; 14d retention bounds it if delivery stops firing).
 - `~/.config/botkit/<bot>.json` — per-bot config overrides (scout: period/summarize/limit + hn block; rss-bot: feed list, max_delivery, `curate` block, `summarize` block — per-item one-line summaries, sonnet, off unless `enabled`). **`rss-bot.json` is chezmoi-managed** — `chezmoi re-add ~/.config/botkit/rss-bot.json` after editing it live, or the source drifts (scout/nagger json are not tracked).
 - `~/.config/botkit/nagger.json` — nagger schedule config + `reminders` array, read by `cmd/nagger`. Hand-edited (was written by ai-agent's `/nagger` before that bot's retirement). Each reminder: `{id, message, every_days, anchor}` (anchor = first due date when never fired). **`quota_enabled`** gates the daily Claude-quota nag; it defaults to `true` via `cmd/nagger`'s config literal, so an absent key keeps the nag. Set to `false` 2026-09-17 — Claude Pro is cancelled, paid through 2026-10-10, so there is no quota to pace.
 - `~/.local/share/nagger/{rate-limits.json,state.json}` — `rate-limits.json` is the pace cache (written by `~/.claude/statusline.py` every CC response — external, don't move; `statusline.sh` became a thin per-OS runner 2026-09-18 and no longer writes it). The writer skips the write where `~/.local/share` is absent, and skips it when no `rate_limits` field is present, so the last good reading survives a payload without limits. `state.json` is the unified per-nag last-fired map (id→YYYY-MM-DD, incl. `quota`; config is immutable, state is separate). Replaced the split `last-sent` + `reminders-state.json` (2026-07-26; `readState` migrates them once if `state.json` is absent).
@@ -71,6 +71,7 @@ External integration points:
 ## Boundaries & gotchas
 
 **Always do:**
+- **`MarkSeen` means *judged*, not *delivered*.** In the split curate/deliver flow those happen on different days; `pending` is what carries an item between them. Curate marks everything it fetched — including what it dropped — so a rejected item doesn't return tomorrow merely because it is still inside the feed window. `ClearPending` is the delivery-side counterpart and runs **only after a successful send**, so a failed send re-delivers rather than losing the digest. Don't "fix" the naming by moving `MarkSeen` back to post-send.
 - **Set `ENABLE_TELEGRAM=true` in `.env`** for real sends; otherwise bots dry-run (log instead of POST). Required in prod.
 - **`cd /path/to/project` before `exec` in runit `run` scripts.** runit doesn't set CWD; `godotenv.Load()` won't find `.env` without it.
 - **Rebuild AND restart after code changes:** `go build -o bin/<bot> ./cmd/<bot>/` AND `SVDIR=~/service sv restart <bot>`. runit runs the pre-built binary from `bin/`, not `go run`. Stale binaries silently serve old behavior — hit production 2026-03-13 (formatter rewritten 2026-03-09, binary still from 2026-03-07).

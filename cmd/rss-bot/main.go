@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -23,7 +24,24 @@ var defaultFeeds = []rss.FeedConfig{
 	{Name: "Julia Evans", URL: "https://jvns.ca/atom.xml", MaxItems: 5},
 }
 
+// Fetching and delivering run on different days on purpose. A feed only exposes
+// its newest `max_items`, so a twice-weekly *fetch* silently loses whatever the
+// busy feeds published in between. Curating daily and queueing the winners keeps
+// every day's items, and hands the curator a list the size it already handles
+// well rather than one three times longer.
+const (
+	modeCurate  = "curate"  // fetch, rank, queue. Sends nothing.
+	modeDeliver = "deliver" // do all of the above, then flush the queue.
+)
+
 func main() {
+	mode := flag.String("mode", modeDeliver,
+		"curate (fetch + rank + queue, no send) or deliver (curate, then send the queue)")
+	flag.Parse()
+	if *mode != modeCurate && *mode != modeDeliver {
+		log.Fatalf("unknown -mode %q (want %q or %q)", *mode, modeCurate, modeDeliver)
+	}
+
 	bot.LoadEnv("rss")
 
 	cfg := config.RssBotConfig{}
@@ -89,13 +107,42 @@ func main() {
 		}
 	}
 
+	// Queue the winners, then mark *everything fetched* judged — including the
+	// items curation dropped. They were considered; letting them back in tomorrow
+	// only because they are still inside the feed window would re-run the same
+	// decision on the same items every day.
+	if len(unseen) > 0 {
+		if err := dedup.Keep(final); err != nil {
+			log.Fatalf("queue: %v", err)
+		}
+		if err := dedup.MarkSeen(unseen); err != nil {
+			log.Fatalf("mark judged: %v", err)
+		}
+	}
+
+	if *mode == modeCurate {
+		queued, err := dedup.PendingCount()
+		if err != nil {
+			log.Fatalf("queue count: %v", err)
+		}
+		fmt.Printf("curate: kept %d of %d, %d queued for the next delivery\n",
+			len(final), len(unseen), queued)
+		return
+	}
+
+	// Deliver everything queued since the last send, not just today's picks.
+	final, err = dedup.Pending()
+	if err != nil {
+		log.Fatalf("read queue: %v", err)
+	}
+
 	// Cap to avoid flooding after outage / first run / curation pass-through
 	if len(final) > maxDelivery {
 		final = final[:maxDelivery]
 	}
 
 	if len(final) == 0 {
-		fmt.Println("No new items — nothing to send.")
+		fmt.Println("Nothing queued — nothing to send.")
 		return
 	}
 
@@ -142,9 +189,10 @@ func main() {
 		}
 	}
 
-	// Only mark seen after successful delivery
-	if err := dedup.MarkSeen(final); err != nil {
-		log.Printf("warning: failed to mark items seen: %v", err)
+	// Clear the queue only after a successful send. Anything still queued is
+	// re-delivered next run, which is exactly what a failed send needs.
+	if err := dedup.ClearPending(final); err != nil {
+		log.Printf("warning: failed to clear delivered items from the queue: %v", err)
 	}
 
 	fmt.Printf("[OK] Delivered %d items in %d messages.\n", len(final), len(messages))
