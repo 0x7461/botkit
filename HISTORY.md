@@ -5,6 +5,13 @@ Split from `PLAN.md` 2026-09-02 (see `agent-docs/PLAN.md` → the `HISTORY.md` t
 
 ---
 
+- **2026-09-29** — **nagger: monthly DeepSeek spend budget** (replaces the Claude quota nag's role
+  after the 2026-10-10 cutover; spec: ithaca `agent_docs/exit-map.md` §6). DeepSeek exposes a
+  balance, not spend, so a month ledger in `state.json` derives it, booking any balance rise as a
+  top-up. Thresholds `warn_fractions` fire once each per month; a jump across several sends one
+  message naming the highest. `state.json` became `{lastFired, spend}`; the flat map migrates on
+  read. Verified with a throwaway HOME against the live balance API (81% case, dedup case,
+  missing-key error case) and a live run that migrated the real state.
 - **2026-08-15** — **rss-bot: `skip_curate` replaced by `favored` — personal blogs no longer bypass
   the ranker.** The old split routed blog feeds straight to delivery unranked, so a prolific blog
   could fill the digest whether or not the day's posts were interesting (Simon Willison's feed was
