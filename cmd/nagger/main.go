@@ -9,7 +9,7 @@
 // Inputs:
 //   - ~/.local/share/nagger/rate-limits.json  (written by ~/.claude/statusline.sh
 //     after every CC response — external producer, do not move)
-//   - ~/.config/botkit/nagger.json            (quota reset anchor, spend budget, reminders)
+//   - ~/.config/guild/nagger.json            (quota reset anchor, spend budget, reminders)
 //   - ~/.config/deepseek/key                  (DeepSeek API key, for the balance)
 //   - ~/.local/share/nagger/state.json        (per-nag last-fired dates + the spend
 //     ledger, owned here; migrated from the flat id→date map and, before that,
@@ -29,9 +29,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/0x7461/botkit/bot"
-	"github.com/0x7461/botkit/config"
-	"github.com/0x7461/botkit/senders/telegram"
+	"github.com/0x7461/guild/bot"
+	"github.com/0x7461/guild/config"
+	"github.com/0x7461/guild/senders/telegram"
 )
 
 // Pace cycle: index = day-1 → (label, target % weekly usage by end of that day).

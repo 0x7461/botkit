@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/0x7461/botkit/bot"
-	"github.com/0x7461/botkit/bot/curate"
+	"github.com/0x7461/guild/bot"
+	"github.com/0x7461/guild/bot/curate"
 )
 
 // Section is one HN category to pull (tag) and how many to keep.

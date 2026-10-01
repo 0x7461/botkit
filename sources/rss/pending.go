@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/0x7461/botkit/bot"
+	"github.com/0x7461/guild/bot"
 )
 
 // pendingRetention bounds the queue if delivery stops firing (service down,

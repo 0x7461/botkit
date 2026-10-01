@@ -1,4 +1,4 @@
-// Package config loads per-bot JSON config from ~/.config/botkit/<name>.json.
+// Package config loads per-bot JSON config from ~/.config/guild/<name>.json.
 // If the file doesn't exist, callers keep their hardwired defaults.
 package config
 
@@ -100,7 +100,7 @@ type Reminder struct {
 	Anchor    string `json:"anchor"` // ISO date (YYYY-MM-DD); first due date when no prior fire recorded
 }
 
-// Load reads ~/.config/botkit/<name>.json into v.
+// Load reads ~/.config/guild/<name>.json into v.
 // If the file does not exist, v is unchanged and nil is returned.
 func Load(name string, v any) error {
 	path := filepath.Join(dir(), name+".json")
@@ -114,7 +114,7 @@ func Load(name string, v any) error {
 	return json.Unmarshal(data, v)
 }
 
-// Save writes v as JSON to ~/.config/botkit/<name>.json, creating the dir.
+// Save writes v as JSON to ~/.config/guild/<name>.json, creating the dir.
 func Save(name string, v any) error {
 	d := dir()
 	if err := os.MkdirAll(d, 0o755); err != nil {
@@ -129,8 +129,8 @@ func Save(name string, v any) error {
 
 func dir() string {
 	if d := os.Getenv("XDG_CONFIG_HOME"); d != "" {
-		return filepath.Join(d, "botkit")
+		return filepath.Join(d, "guild")
 	}
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".config", "botkit")
+	return filepath.Join(home, ".config", "guild")
 }

@@ -1,4 +1,4 @@
-# AGENTS.md — botkit
+# AGENTS.md — guild
 
 Updated: 2026-09-29
 
@@ -56,16 +56,16 @@ cmd/{paperboy,scout,nagger}/       bot entry points — one binary each
 sources/{rss,github,hackernews}/  Source implementations (gofeed, goquery, Algolia HN API)
 formatters/{rss,scout}/           Formatter implementations
 senders/telegram/                 Telegram sender + GetChatID helper
-config/                           per-bot JSON config loader (~/.config/botkit/<bot>.json)
+config/                           per-bot JSON config loader (~/.config/guild/<bot>.json)
 compress/                         summarize CLI shell-out (scout's GitHub trending summaries)
 bin/                              built binaries (gitignored)
 ```
 
 External integration points:
 - `~/service/{scout,paperboy,nagger}/` — runit user services.
-- `~/.local/share/botkit/rss-seen.db` — RSS SQLite: `seen` (judged guids, 90d retention) + `pending` (curated-but-undelivered items, **stored whole** — a guid is useless later because the feed window has moved on; 14d retention bounds it if delivery stops firing).
-- `~/.config/botkit/<bot>.json` — per-bot config overrides (scout: period/summarize/limit + hn block; paperboy: feed list, max_delivery, `curate` block, `summarize` block — per-item one-line summaries, sonnet, off unless `enabled`). **`paperboy.json` is chezmoi-managed** — `chezmoi re-add ~/.config/botkit/paperboy.json` after editing it live, or the source drifts (scout/nagger json are not tracked).
-- `~/.config/botkit/nagger.json` — nagger schedule config + `reminders` array, read by `cmd/nagger`. Hand-edited (was written by ai-agent's `/nagger` before that bot's retirement). Each reminder: `{id, message, every_days, anchor}` (anchor = first due date when never fired). **`quota_enabled`** gates the daily Claude-quota nag; it defaults to `true` via `cmd/nagger`'s config literal, so an absent key keeps the nag. Set to `false` 2026-09-17 — Claude Pro is cancelled, paid through 2026-10-10, so there is no quota to pace. **`spend_quota_usd`** (monthly DeepSeek budget; 0/absent disables the spend nag; `~/.pi/agent/extensions/status.ts` reads the same key) and **`warn_fractions`** (default `[0.5, 0.8, 0.9]`; live config adds `1.0`). The balance comes from DeepSeek's `/user/balance` with the key at `~/.config/deepseek/key`; an unreadable balance fires a `spend-error` nag at most daily.
+- `~/.local/share/guild/rss-seen.db` — RSS SQLite: `seen` (judged guids, 90d retention) + `pending` (curated-but-undelivered items, **stored whole** — a guid is useless later because the feed window has moved on; 14d retention bounds it if delivery stops firing).
+- `~/.config/guild/<bot>.json` — per-bot config overrides (scout: period/summarize/limit + hn block; paperboy: feed list, max_delivery, `curate` block, `summarize` block — per-item one-line summaries, sonnet, off unless `enabled`). **`paperboy.json` is chezmoi-managed** — `chezmoi re-add ~/.config/guild/paperboy.json` after editing it live, or the source drifts (scout/nagger json are not tracked).
+- `~/.config/guild/nagger.json` — nagger schedule config + `reminders` array, read by `cmd/nagger`. Hand-edited (was written by ai-agent's `/nagger` before that bot's retirement). Each reminder: `{id, message, every_days, anchor}` (anchor = first due date when never fired). **`quota_enabled`** gates the daily Claude-quota nag; it defaults to `true` via `cmd/nagger`'s config literal, so an absent key keeps the nag. Set to `false` 2026-09-17 — Claude Pro is cancelled, paid through 2026-10-10, so there is no quota to pace. **`spend_quota_usd`** (monthly DeepSeek budget; 0/absent disables the spend nag; `~/.pi/agent/extensions/status.ts` reads the same key) and **`warn_fractions`** (default `[0.5, 0.8, 0.9]`; live config adds `1.0`). The balance comes from DeepSeek's `/user/balance` with the key at `~/.config/deepseek/key`; an unreadable balance fires a `spend-error` nag at most daily.
 - `~/.local/share/nagger/{rate-limits.json,state.json}` — `rate-limits.json` is the pace cache (written by `~/.claude/statusline.py` every CC response — external, don't move; `statusline.sh` became a thin per-OS runner 2026-09-18 and no longer writes it). The writer skips the write where `~/.local/share` is absent, and skips it when no `rate_limits` field is present, so the last good reading survives a payload without limits. `state.json` holds `lastFired` (id→YYYY-MM-DD, incl. `quota`) and `spend`, the month ledger (`start_balance`, `topups`, `last_balance`, `fired` thresholds; config is immutable, state is separate). A rise in balance is booked as a top-up, never as negative spend, and the ledger restarts on the first run of a month. The flat id→date format (until 2026-09-29) is read as `lastFired`; the older split `last-sent` + `reminders-state.json` still migrates once if `state.json` is absent. **Spend is account-wide:** if the DeepSeek key is used on another machine, its spend counts here too.
 
 ## Boundaries & gotchas
@@ -90,7 +90,7 @@ External integration points:
 - Adding a new bot binary. Comes with runit service setup, BotFather token, schedule decision — discuss in PLAN.md `## Decisions` first.
 
 **Untested / known-fragile:**
-- Recovery path when `~/.config/botkit/nagger.json` is malformed. `cmd/nagger` reads it; error paths on a bad hand-edit haven't been exercised.
+- Recovery path when `~/.config/guild/nagger.json` is malformed. `cmd/nagger` reads it; error paths on a bad hand-edit haven't been exercised.
 
 ## Where to look
 
@@ -98,4 +98,4 @@ External integration points:
 - **`PLAN.md ## Decisions`** (local-only) — architectural choices: separate binaries, snooze+runit scheduling, three-interface split.
 - **`PLAN.md ## Internals`** — recap integration, dotenv/runit interaction details.
 - **`HISTORY.md`** — what shipped when, including the 2026-06-14 ai-agent retirement and the 2026-03-13 Opus code-review hardening (20 issues fixed in one commit, `b10018a`).
-- **`cmd/nagger/`** — quota-pace nudge, folded in 2026-06-05 (was the standalone `~/projects/nagger` Python project). Reads `~/.config/botkit/nagger.json`.
+- **`cmd/nagger/`** — quota-pace nudge, folded in 2026-06-05 (was the standalone `~/projects/nagger` Python project). Reads `~/.config/guild/nagger.json`.

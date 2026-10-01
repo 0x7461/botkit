@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/0x7461/botkit/bot"
+	"github.com/0x7461/guild/bot"
 )
 
 // Formatter renders items grouped by Meta["source"], in first-seen order.

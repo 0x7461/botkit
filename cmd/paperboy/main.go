@@ -8,12 +8,12 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/0x7461/botkit/bot"
-	"github.com/0x7461/botkit/bot/curate"
-	"github.com/0x7461/botkit/config"
-	rssformatter "github.com/0x7461/botkit/formatters/rss"
-	"github.com/0x7461/botkit/senders/telegram"
-	"github.com/0x7461/botkit/sources/rss"
+	"github.com/0x7461/guild/bot"
+	"github.com/0x7461/guild/bot/curate"
+	"github.com/0x7461/guild/config"
+	rssformatter "github.com/0x7461/guild/formatters/rss"
+	"github.com/0x7461/guild/senders/telegram"
+	"github.com/0x7461/guild/sources/rss"
 )
 
 var defaultFeeds = []rss.FeedConfig{
@@ -70,7 +70,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("cannot determine home directory: %v", err)
 	}
-	dbPath := filepath.Join(home, ".local", "share", "botkit", "rss-seen.db")
+	dbPath := filepath.Join(home, ".local", "share", "guild", "rss-seen.db")
 	dedup, err := rss.NewDeduplicator(dbPath)
 	if err != nil {
 		log.Fatalf("dedup init: %v", err)

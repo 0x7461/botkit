@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/0x7461/botkit/bot"
+	"github.com/0x7461/guild/bot"
 )
 
 const summarizePrompt = `For each article below, write one neutral sentence summarizing what it is about, for a reader scanning a news digest. Base it only on the title and description provided — do not speculate beyond them.

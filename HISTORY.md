@@ -5,6 +5,7 @@ Split from `PLAN.md` 2026-09-02 (see `agent-docs/PLAN.md` → the `HISTORY.md` t
 
 ---
 
+- **2026-10-02** — **Renamed botkit → guild** (#89 town-roles theme: where the bots are made and belong). Go module `github.com/0x7461/guild`, config `~/.config/guild/`, data `~/.local/share/guild/` (paperboy's `rss-seen.db`), the repo folder and GitHub repo. The bots keep their names: nagger, paperboy, scout.
 - **2026-09-29** — **nagger: monthly DeepSeek spend budget** (replaces the Claude quota nag's role
   after the 2026-10-10 cutover; spec: ithaca `agent_docs/exit-map.md` §6). DeepSeek exposes a
   balance, not spend, so a month ledger in `state.json` derives it, booking any balance rise as a

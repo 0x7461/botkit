@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/0x7461/botkit/bot"
+	"github.com/0x7461/guild/bot"
 )
 
 var senderHTTPClient = &http.Client{Timeout: 30 * time.Second}

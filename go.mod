@@ -1,4 +1,4 @@
-module github.com/0x7461/botkit
+module github.com/0x7461/guild
 
 go 1.25.5
 

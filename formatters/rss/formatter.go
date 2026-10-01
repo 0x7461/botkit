@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/0x7461/botkit/bot"
+	"github.com/0x7461/guild/bot"
 )
 
 // Formatter renders RSS items as Telegram HTML under a single "Today's picks"

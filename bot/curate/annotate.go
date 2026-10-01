@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/0x7461/botkit/bot"
+	"github.com/0x7461/guild/bot"
 )
 
 // Annotation is the per-item enrichment returned by the model.

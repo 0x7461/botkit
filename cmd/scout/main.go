@@ -5,12 +5,12 @@ import (
 	"log"
 	"os"
 
-	"github.com/0x7461/botkit/bot"
-	"github.com/0x7461/botkit/config"
-	"github.com/0x7461/botkit/formatters/scout"
-	"github.com/0x7461/botkit/senders/telegram"
-	github "github.com/0x7461/botkit/sources/github"
-	"github.com/0x7461/botkit/sources/hackernews"
+	"github.com/0x7461/guild/bot"
+	"github.com/0x7461/guild/config"
+	"github.com/0x7461/guild/formatters/scout"
+	"github.com/0x7461/guild/senders/telegram"
+	github "github.com/0x7461/guild/sources/github"
+	"github.com/0x7461/guild/sources/hackernews"
 )
 
 func main() {

@@ -1,4 +1,4 @@
-# botkit
+# guild
 
 A lightweight Go framework for scheduled Telegram bots. Implement three interfaces — Source, Formatter, Sender — wire them together, schedule with snooze + runit.
 

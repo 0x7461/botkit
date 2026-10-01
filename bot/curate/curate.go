@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/0x7461/botkit/bot"
+	"github.com/0x7461/guild/bot"
 )
 
 // Curator ranks items and returns at most `target` of them, ordered best-first.
