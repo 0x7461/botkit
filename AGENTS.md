@@ -21,7 +21,7 @@ Each bot loads `.env.<name>` then the umbrella `.env` via `bot.LoadEnv(name)` (f
 
 ## Services
 
-Declared runtime state — reconciled against `sv status` + `down` sentinels by `maint-watch doctor` and the weekly maint-watch scan (`service.claim_*` findings). `persistent` = must be up and survive reboot.
+Declared runtime state — reconciled against `sv status` + `down` sentinels by `caretaker doctor` and the weekly caretaker scan (`service.claim_*` findings). `persistent` = must be up and survive reboot.
 
 - `scout`: persistent, every 7d — weekly Sat 09:00 GitHub trending + HN digest (`snooze -w6 -H9`). Credentials in `.env.scout` (`BOT_SCOUT__TOKEN`/`BOT_SCOUT__CHAT`). Replaced `github-trending`/gh-bot (retired 2026-06-17).
 - `paperboy`: persistent, every 1d — fires daily 18:00, **delivers Mon + Fri only** (`snooze -H18` → `-mode=deliver` on `date +%u` 1|5, else `-mode=curate`). The split is deliberate: a feed only exposes its newest `max_items`, so a twice-weekly *fetch* loses whatever the busy feeds published in between. Curating daily and queueing the winners (`pending` table in `rss-seen.db`) keeps every day's items and holds each curate prompt to ~50 items — the size gemma4 handles well — instead of one 3× longer on delivery day.
