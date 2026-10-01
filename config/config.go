@@ -55,8 +55,8 @@ type SummarizeConfig struct {
 	TimeoutSeconds int    `json:"timeout_seconds"` // wall-clock cap for the batched call
 }
 
-// RssBotConfig holds configuration for the RSS digest bot.
-type RssBotConfig struct {
+// PaperboyConfig holds configuration for paperboy, the RSS digest bot.
+type PaperboyConfig struct {
 	Source struct {
 		MaxDelivery int             `json:"max_delivery"`
 		Feeds       []FeedEntry     `json:"feeds"`

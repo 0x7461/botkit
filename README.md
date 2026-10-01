@@ -22,7 +22,7 @@ Adding a new bot = implement `Source`, pick a `Formatter` and `Sender`, pass to 
 
 ## Bots
 
-- **rss-bot** — RSS feed aggregator. HN Best, Lobsters, Techmeme, blogs. SQLite dedup. Runs twice daily.
+- **paperboy** — RSS feed aggregator. HN Best, Lobsters, Techmeme, blogs. SQLite dedup. Runs twice daily.
 - **scout** — combined weekly "what's new online" digest: GitHub trending + HN Ask/Show/Tell, ranked by points+comments, each with a one-line summary and a comment-thread sentiment read. Built on `MultiSource`. Runs weekly.
 - **nagger** — daily Claude-quota pace nudge. One-shot, hourly 08–22, dedup'd to one message/day.
 
@@ -30,7 +30,7 @@ Adding a new bot = implement `Source`, pick a `Formatter` and `Sender`, pass to 
 
 ```
 bot/                        — framework: interfaces + Bot runner + MultiSource
-cmd/{rss-bot,scout,nagger}/ — bot entry points
+cmd/{paperboy,scout,nagger}/ — bot entry points
 sources/{rss,github,hackernews}/ — Source implementations
 formatters/{rss,scout}/ — Formatter implementations
 senders/telegram/           — Telegram sender (HTML, message splitting)
@@ -38,7 +38,7 @@ senders/telegram/           — Telegram sender (HTML, message splitting)
 
 ## Configuration
 
-Copy `.env.example` to `.env` and fill in bot tokens and chat IDs. Each bot can have its own token (`BOT_RSS__TOKEN`, `BOT_SCOUT__TOKEN`) or fall back to `TELEGRAM_BOT_TOKEN`.
+Copy `.env.example` to `.env` and fill in bot tokens and chat IDs. Each bot can have its own token (`BOT_PAPERBOY__TOKEN`, `BOT_SCOUT__TOKEN`) or fall back to `TELEGRAM_BOT_TOKEN`.
 
 ## Dependencies
 

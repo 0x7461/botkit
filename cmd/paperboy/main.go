@@ -42,12 +42,12 @@ func main() {
 		log.Fatalf("unknown -mode %q (want %q or %q)", *mode, modeCurate, modeDeliver)
 	}
 
-	bot.LoadEnv("rss")
+	bot.LoadEnv("paperboy")
 
-	cfg := config.RssBotConfig{}
+	cfg := config.PaperboyConfig{}
 	cfg.Source.MaxDelivery = 50
-	if err := config.Load("rss-bot", &cfg); err != nil {
-		log.Printf("Warning: could not load rss-bot config: %v", err)
+	if err := config.Load("paperboy", &cfg); err != nil {
+		log.Printf("Warning: could not load paperboy config: %v", err)
 	}
 
 	feeds := defaultFeeds
@@ -167,16 +167,16 @@ func main() {
 		return
 	}
 
-	token := bot.FirstNonEmpty(os.Getenv("BOT_RSS__TOKEN"), os.Getenv("TELEGRAM_BOT_TOKEN"))
+	token := bot.FirstNonEmpty(os.Getenv("BOT_PAPERBOY__TOKEN"), os.Getenv("TELEGRAM_BOT_TOKEN"))
 	var chatID int64
-	chatStr := bot.FirstNonEmpty(os.Getenv("BOT_RSS__CHAT"), os.Getenv("TELEGRAM_CHAT_ID"))
+	chatStr := bot.FirstNonEmpty(os.Getenv("BOT_PAPERBOY__CHAT"), os.Getenv("TELEGRAM_CHAT_ID"))
 	if chatStr != "" {
 		if _, err := fmt.Sscanf(chatStr, "%d", &chatID); err != nil {
 			log.Fatalf("invalid chat ID %q: %v", chatStr, err)
 		}
 	}
 	if token == "" || chatID == 0 {
-		log.Fatal("ENABLE_TELEGRAM=true but BOT_RSS__TOKEN/BOT_RSS__CHAT (or TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID) is missing")
+		log.Fatal("ENABLE_TELEGRAM=true but BOT_PAPERBOY__TOKEN/BOT_PAPERBOY__CHAT (or TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID) is missing")
 	}
 
 	formatter := &rssformatter.Formatter{}
