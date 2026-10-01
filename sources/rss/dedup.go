@@ -43,17 +43,18 @@ func NewDeduplicator(path string) (*Deduplicator, error) {
 		return nil, fmt.Errorf("dedup: prune old entries: %w", err)
 	}
 
-	return &Deduplicator{db: db}, nil
+	d := &Deduplicator{db: db}
+	if err := d.initPending(); err != nil {
+		return nil, err
+	}
+	return d, nil
 }
 
 // Filter returns only items whose GUID has not been seen before.
 func (d *Deduplicator) Filter(items []bot.Item) ([]bot.Item, error) {
 	var unseen []bot.Item
 	for _, item := range items {
-		guid := item.Meta["guid"]
-		if guid == "" {
-			guid = item.URL
-		}
+		guid := itemGUID(item)
 		var count int
 		err := d.db.QueryRow(`SELECT COUNT(*) FROM seen WHERE guid = ?`, guid).Scan(&count)
 		if err != nil {
@@ -66,14 +67,15 @@ func (d *Deduplicator) Filter(items []bot.Item) ([]bot.Item, error) {
 	return unseen, nil
 }
 
-// MarkSeen records items as delivered. Call after successful Send.
+// MarkSeen records items as *judged* — fetched, shown to the curator, and either
+// queued or dropped. It no longer means "delivered": in the split curate/deliver
+// flow the two happen on different days, and `pending` is what carries an item
+// between them. Marking at judge-time is deliberate — an item the curator dropped
+// must not come back tomorrow just because it is still inside the feed window.
 func (d *Deduplicator) MarkSeen(items []bot.Item) error {
 	now := time.Now().Unix()
 	for _, item := range items {
-		guid := item.Meta["guid"]
-		if guid == "" {
-			guid = item.URL
-		}
+		guid := itemGUID(item)
 		feed := item.Meta["feed"]
 		_, err := d.db.Exec(
 			`INSERT OR IGNORE INTO seen (guid, feed, seen_at) VALUES (?, ?, ?)`,

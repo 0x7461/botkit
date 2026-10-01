@@ -1,6 +1,6 @@
 # AGENTS.md — botkit
 
-Updated: 2026-09-18
+Updated: 2026-09-24
 
 Lightweight Go framework for scheduled Telegram bots. Three interfaces (Source / Formatter / Sender) wired into one runner; each bot is its own binary on a runit + snooze schedule. Binaries: rss-bot (RSS digest), scout (combined GitHub trending + HN Ask/Show/Tell — `bot.MultiSource`), and nagger (daily Claude-quota pace nudge + recurring manual-task reminders — uses `senders/telegram` directly rather than the Source/Formatter runner).
 
@@ -24,7 +24,7 @@ Each bot loads `.env.<name>` then the umbrella `.env` via `bot.LoadEnv(name)` (f
 Declared runtime state — reconciled against `sv status` + `down` sentinels by `maint-watch doctor` and the weekly maint-watch scan (`service.claim_*` findings). `persistent` = must be up and survive reboot.
 
 - `scout`: persistent, every 7d — weekly Sat 09:00 GitHub trending + HN digest (`snooze -w6 -H9`). Credentials in `.env.scout` (`BOT_SCOUT__TOKEN`/`BOT_SCOUT__CHAT`). Replaced `github-trending`/gh-bot (retired 2026-06-17).
-- `rss-bot`: persistent, every 1d — daily 12:00 RSS digest (`snooze -H12`)
+- `rss-bot`: persistent, every 1d — fires daily 18:00, **delivers Mon + Fri only** (`snooze -H18` → `-mode=deliver` on `date +%u` 1|5, else `-mode=curate`). The split is deliberate: a feed only exposes its newest `max_items`, so a twice-weekly *fetch* loses whatever the busy feeds published in between. Curating daily and queueing the winners (`pending` table in `rss-seen.db`) keeps every day's items and holds each curate prompt to ~50 items — the size gemma4 handles well — instead of one 3× longer on delivery day.
 - `nagger`: persistent, every 12h — hourly 08–22 (`snooze -H8-22 ./bin/nagger`). Runs a unified set of periodic **nags** (`cmd/nagger`: `Nag` = id + interval + anchor + renderer): the daily Claude-quota pace check (interval 1, live-computed message) and recurring manual-task **reminders** (fixed-day cadence, e.g. quarterly archive chores; configured under `reminders` in `nagger.json`). One run evaluates all nags, fires the due ones as **one combined message** (grouped under headers), and dedups per-nag via `state.json`. Per-nag dedup makes the hourly poll idempotent (each nag fires once per cycle).
 
 ## Commands
@@ -49,7 +49,9 @@ go run ./cmd/rss-bot/
 
 ```
 bot/                              framework: Item, Source/Formatter/Sender, Bot runner, MultiSource
-bot/curate/                       LLM passes: ranking (ChainCurator, rss-bot) + Annotate (summary+sentiment, scout), claude -p + Ollama
+bot/curate/                       LLM passes: ranking (ChainCurator, rss-bot), Summarize (rss-bot) +
+                                  Annotate (scout). Backends: Ollama (default) or claude -p, routed
+                                  explicitly per pass via runText/backendFor.
 cmd/{rss-bot,scout,nagger}/       bot entry points — one binary each
 sources/{rss,github,hackernews}/  Source implementations (gofeed, goquery, Algolia HN API)
 formatters/{rss,scout}/           Formatter implementations
@@ -61,7 +63,7 @@ bin/                              built binaries (gitignored)
 
 External integration points:
 - `~/service/{scout,rss-bot,nagger}/` — runit user services.
-- `~/.local/share/botkit/rss-seen.db` — RSS dedup SQLite.
+- `~/.local/share/botkit/rss-seen.db` — RSS SQLite: `seen` (judged guids, 90d retention) + `pending` (curated-but-undelivered items, **stored whole** — a guid is useless later because the feed window has moved on; 14d retention bounds it if delivery stops firing).
 - `~/.config/botkit/<bot>.json` — per-bot config overrides (scout: period/summarize/limit + hn block; rss-bot: feed list, max_delivery, `curate` block, `summarize` block — per-item one-line summaries, sonnet, off unless `enabled`). **`rss-bot.json` is chezmoi-managed** — `chezmoi re-add ~/.config/botkit/rss-bot.json` after editing it live, or the source drifts (scout/nagger json are not tracked).
 - `~/.config/botkit/nagger.json` — nagger schedule config + `reminders` array, read by `cmd/nagger`. Hand-edited (was written by ai-agent's `/nagger` before that bot's retirement). Each reminder: `{id, message, every_days, anchor}` (anchor = first due date when never fired). **`quota_enabled`** gates the daily Claude-quota nag; it defaults to `true` via `cmd/nagger`'s config literal, so an absent key keeps the nag. Set to `false` 2026-09-17 — Claude Pro is cancelled, paid through 2026-10-10, so there is no quota to pace.
 - `~/.local/share/nagger/{rate-limits.json,state.json}` — `rate-limits.json` is the pace cache (written by `~/.claude/statusline.py` every CC response — external, don't move; `statusline.sh` became a thin per-OS runner 2026-09-18 and no longer writes it). The writer skips the write where `~/.local/share` is absent, and skips it when no `rate_limits` field is present, so the last good reading survives a payload without limits. `state.json` is the unified per-nag last-fired map (id→YYYY-MM-DD, incl. `quota`; config is immutable, state is separate). Replaced the split `last-sent` + `reminders-state.json` (2026-07-26; `readState` migrates them once if `state.json` is absent).
@@ -69,8 +71,10 @@ External integration points:
 ## Boundaries & gotchas
 
 **Always do:**
+- **`MarkSeen` means *judged*, not *delivered*.** In the split curate/deliver flow those happen on different days; `pending` is what carries an item between them. Curate marks everything it fetched — including what it dropped — so a rejected item doesn't return tomorrow merely because it is still inside the feed window. `ClearPending` is the delivery-side counterpart and runs **only after a successful send**, so a failed send re-delivers rather than losing the digest. Don't "fix" the naming by moving `MarkSeen` back to post-send.
 - **Set `ENABLE_TELEGRAM=true` in `.env`** for real sends; otherwise bots dry-run (log instead of POST). Required in prod.
 - **`cd /path/to/project` before `exec` in runit `run` scripts.** runit doesn't set CWD; `godotenv.Load()` won't find `.env` without it.
+- **scout's `run` exports `PATH="/home/ta/.local/share/mise/shims:/home/ta/.local/bin:$PATH"`.** `compress/` shells out to bare `summarize`, an npm CLI (`#!/usr/bin/env node`) — without mise's node shim on PATH it fails with `env: 'node': No such file or directory`. Don't rely on runsvdir's inherited PATH (it comes from whatever session started niri).
 - **Rebuild AND restart after code changes:** `go build -o bin/<bot> ./cmd/<bot>/` AND `SVDIR=~/service sv restart <bot>`. runit runs the pre-built binary from `bin/`, not `go run`. Stale binaries silently serve old behavior — hit production 2026-03-13 (formatter rewritten 2026-03-09, binary still from 2026-03-07).
 - **One binary per bot.** Different schedules, different tokens, different lifecycles. Don't bundle.
 - **Use `BOT_<NAME>__TOKEN` / `BOT_<NAME>__CHAT`** for per-bot Telegram credentials; falls back to generic `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` if unset. Each bot ideally has its own BotFather token. Per-bot secrets live in `.env.<name>`, shared values in the umbrella `.env`; both loaded via `bot.LoadEnv(name)`.
@@ -80,6 +84,7 @@ External integration points:
 - **Don't use `cmd.Output()` for `claude -p` invocations.** When CC quota expires, `claude -p` writes the error to **stdout, not stderr**. `cmd.Output()` discards stdout on error → empty error message. Use an explicit `bytes.Buffer` for stderr and fall back to stdout content if stderr is empty. Applies to any `claude -p` shell-out (e.g. `bot/curate/`).
 - **Keep GitHub trending (scout's `sources/github`) and RSS (rss-bot) as separate sources on separate bots.** Don't fold RSS feeds into scout or GitHub trending into rss-bot — different schedules, formatters, and lifecycles.
 - **Don't pass `--bare` to `claude -p`** in `bot/curate/`. `--bare` skips not just CLAUDE.md/settings but also auth discovery → "Not logged in" failure. Caught 2026-05-25 when first wiring rss-bot curation.
+- **Don't lower `ollamaNumCtx` / `ollamaNumPredict` (`bot/curate/curate.go`) without re-measuring.** Both Ollama defaults fail *silently*, which is why they are pinned rather than left alone: a prompt longer than `num_ctx` (default 8192, 4096 on `/v1`) is **truncated with no error**, and hitting `num_predict` returns an **empty** `response` with `done_reason: "length"` — which reaches the caller as "no JSON array found", indistinguishable from a bad answer. `runOllamaText` turns the empty case into an explicit error naming `num_predict`; keep that. Measured 2026-09-24 on `gemma4:e4b`, CPU-only (no GPU offload — 9.6GB model against 4GB VRAM): 28s model load, 57 tok/s prefill, 8.5 tok/s generation. A 120-item curate prompt is ~9.7k tokens, so a cold run costs ~4.5 minutes — hence the 600s timeouts. The old 60s curate / 120s summarize caps would fail every cold run.
 
 **Ask first:**
 - Adding a new bot binary. Comes with runit service setup, BotFather token, schedule decision — discuss in PLAN.md `## Decisions` first.

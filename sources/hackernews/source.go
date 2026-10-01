@@ -36,6 +36,7 @@ type Source struct {
 	Sections   []Section
 	Days       int  // lookback window (default 7)
 	Annotate   bool // attach summary + sentiment via LLM
+	Backend    string
 	Model      string
 	TimeoutSec int
 }
@@ -99,15 +100,11 @@ func (s *Source) annotate(items []bot.Item) {
 			items[i].Meta["context"] = ctx
 		}
 	}
-	model := s.Model
-	if model == "" {
-		model = "sonnet"
-	}
 	timeout := time.Duration(s.TimeoutSec) * time.Second
 	if timeout <= 0 {
-		timeout = 120 * time.Second
+		timeout = 300 * time.Second
 	}
-	curate.Annotate(items, model, timeout)
+	curate.Annotate(items, s.Backend, s.Model, timeout)
 }
 
 // --- Algolia search ---

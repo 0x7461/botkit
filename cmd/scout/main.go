@@ -8,9 +8,9 @@ import (
 	"github.com/0x7461/botkit/bot"
 	"github.com/0x7461/botkit/config"
 	"github.com/0x7461/botkit/formatters/scout"
+	"github.com/0x7461/botkit/senders/telegram"
 	github "github.com/0x7461/botkit/sources/github"
 	"github.com/0x7461/botkit/sources/hackernews"
-	"github.com/0x7461/botkit/senders/telegram"
 )
 
 func main() {
@@ -22,8 +22,9 @@ func main() {
 	cfg.GitHub.Limit = 10
 	cfg.HN.Days = 7
 	cfg.HN.Annotate = true
-	cfg.HN.Model = "sonnet"
-	cfg.HN.TimeoutSec = 120
+	cfg.HN.Backend = "ollama"
+	cfg.HN.Model = "gemma4:e4b"
+	cfg.HN.TimeoutSec = 300
 	cfg.Formatter.Title = "Scout — Weekly GitHub + HN"
 	if err := config.Load("scout", &cfg); err != nil {
 		log.Printf("Warning: could not load scout config: %v", err)
@@ -34,6 +35,7 @@ func main() {
 		{Name: "Hacker News", Source: &hackernews.Source{
 			Days:       cfg.HN.Days,
 			Annotate:   cfg.HN.Annotate,
+			Backend:    cfg.HN.Backend,
 			Model:      cfg.HN.Model,
 			TimeoutSec: cfg.HN.TimeoutSec,
 		}},

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os/exec"
 	"regexp"
 	"strings"
@@ -38,12 +39,14 @@ Posts:
 // Annotate best-effort fills Meta["summary"] and Meta["sentiment"] for each
 // item from its Title and Meta["context"] (e.g. top comments). On any failure
 // it logs and leaves items unchanged, so callers can always ship the digest.
-func Annotate(items []bot.Item, model string, timeout time.Duration) {
+func Annotate(items []bot.Item, backend, model string, timeout time.Duration) {
 	if len(items) == 0 {
 		return
 	}
-	if full, ok := claudeModelMap[model]; ok {
-		model = full
+	if backend == "claude-code" {
+		if full, ok := claudeModelMap[model]; ok {
+			model = full
+		}
 	}
 
 	var sb strings.Builder
@@ -56,7 +59,7 @@ func Annotate(items []bot.Item, model string, timeout time.Duration) {
 	}
 	prompt := fmt.Sprintf(annotatePrompt, sb.String())
 
-	out, err := runClaudeText(model, timeout, prompt)
+	out, err := runText(backend, model, timeout, prompt)
 	if err != nil {
 		fmt.Printf("annotate: %v\n", err)
 		return
@@ -77,6 +80,73 @@ func Annotate(items []bot.Item, model string, timeout time.Duration) {
 			items[i].Meta["sentiment"] = strings.ToLower(strings.TrimSpace(anns[i].Sentiment))
 		}
 	}
+}
+
+// runText dispatches one text pass to the named backend. Routing is explicit:
+// an unrecognised backend is an error, never a silent default — the backends
+// differ in what they do with the prompt, not just in price.
+func runText(backend, model string, timeout time.Duration, prompt string) (string, error) {
+	switch backend {
+	case "ollama":
+		return runOllamaText(model, timeout, prompt)
+	case "claude-code":
+		return runClaudeText(model, timeout, prompt)
+	case "":
+		return "", fmt.Errorf("no backend configured")
+	default:
+		return "", fmt.Errorf("unknown backend %q", backend)
+	}
+}
+
+// runOllamaText runs one text pass against a local Ollama model.
+//
+// num_predict is explicit: Ollama returns an EMPTY response with
+// done_reason "length" when the cap is hit, and an empty string reaches the
+// caller as "no JSON array found" rather than as a truncation — a silent
+// quality loss. num_ctx likewise: the default is 8192 (4096 on /v1) and
+// Ollama truncates the prompt past it without erroring.
+func runOllamaText(model string, timeout time.Duration, prompt string) (string, error) {
+	reqBody, _ := json.Marshal(map[string]any{
+		"model":  model,
+		"prompt": prompt,
+		"stream": false,
+		"think":  false,
+		"options": map[string]any{
+			"temperature": 0.2,
+			"num_ctx":     ollamaNumCtx,
+			"num_predict": ollamaNumPredict,
+		},
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, "POST", ollamaBaseURL+"/api/generate", bytes.NewReader(reqBody))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("ollama: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("ollama: HTTP %d", resp.StatusCode)
+	}
+
+	var parsed struct {
+		Response   string `json:"response"`
+		DoneReason string `json:"done_reason"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
+		return "", fmt.Errorf("ollama: decode: %w", err)
+	}
+	if strings.TrimSpace(parsed.Response) == "" {
+		return "", fmt.Errorf("ollama: empty response (done_reason %q) — raise num_predict", parsed.DoneReason)
+	}
+	return parsed.Response, nil
 }
 
 // runClaudeText shells out to `claude -p` and returns its text output. It mirrors
